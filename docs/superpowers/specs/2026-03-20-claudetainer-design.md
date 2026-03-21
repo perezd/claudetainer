@@ -325,7 +325,6 @@ Installed at first boot by the entrypoint script via `claude plugin install supe
 - **Size:** `shared-cpu-1x`, 1GB RAM (minimum; 2GB recommended for larger projects)
 - **Persistence:** None — workspace is ephemeral, GitHub is source of truth
 - **Restart policy:** `no` (manual restarts only)
-- **Maximum lifetime:** 24 hours. The entrypoint starts a background process (`sleep 86400 && fly machine stop`) that auto-stops the container after 24 hours, limiting the window for stale rules or long-running exfiltration attempts. The user can restart the machine for a new session.
 
 ### Secrets (via `fly secrets set`)
 
