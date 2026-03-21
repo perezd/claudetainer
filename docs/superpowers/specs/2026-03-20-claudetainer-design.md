@@ -385,8 +385,17 @@ Note: No `ANTHROPIC_API_KEY` is needed. Claude Code authenticates via interactiv
 
 ```bash
 fly ssh console
-tmux attach -t claude
 ```
+
+The root user's `.bashrc` auto-attaches to the Claude tmux session on SSH login:
+
+```bash
+if [ -n "$SSH_CONNECTION" ] && tmux has-session -t claude 2>/dev/null; then
+  exec tmux attach -t claude
+fi
+```
+
+This is baked into the image so `fly ssh console` drops directly into the Claude Code session.
 
 ### When Claude Code Exits
 
