@@ -177,11 +177,11 @@ Note: Write/Edit protection is no longer needed in the hook because the root fil
 allow:^git\s+(status|log|diff|branch|checkout|switch|add|commit|stash|rebase|merge|fetch|remote|show|rev-parse|symbolic-ref|config|init|reset|restore|cherry-pick|tag|bisect|blame|shortlog|describe|ls-files|ls-tree|rev-list|for-each-ref|name-rev|reflog)\b
 allow:^git\s+clone\b
 allow:^(ls|cat|head|tail|cp|mv|mkdir|touch|tree|less)\b
-allow:^(grep|rg|fd|find|ag)\b
+allow:^(grep|rg|fd|ag)\b
 allow:^bun (run|test|build|check)\b
 allow:^(python3?)\b
 allow:^(echo|pwd|cd|which)\b
-allow:^(wc|sort|uniq|diff|sed|awk|xargs|tee|basename|dirname)\b
+allow:^(wc|sort|uniq|diff|sed|awk|tee|basename|dirname)\b
 allow:^(date|file|stat|realpath|readlink|id|whoami|uname|hostname)\b
 allow:^(tar|gzip|gunzip|zip|unzip)\b
 allow:^(tr|cut|paste|comm|join)\b
@@ -216,6 +216,9 @@ block:^tmux\s+(send-keys|send-prefix|capture-pane|pipe-pane)\b
 # Prevent reading environment variables and /proc (credential leaks)
 block:^(printenv|env$)
 block:.*/proc/
+# Prevent command execution via find/xargs arguments
+block:.*-exec\b
+block:.*\bxargs\b
 
 # Approval-required patterns (exit 2 with approval instructions)
 approve:^(apt-get|apt)\s+install\b
