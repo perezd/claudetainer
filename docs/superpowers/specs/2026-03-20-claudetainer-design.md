@@ -86,6 +86,9 @@ iptables -P OUTPUT DROP
 # Allow loopback (required for sidecar communication)
 iptables -A OUTPUT -o lo -j ACCEPT
 
+# Block cloud metadata services (Fly.io, AWS, GCP, Azure)
+iptables -A OUTPUT -d 169.254.0.0/16 -j DROP
+
 # Allow DNS to trusted resolver only
 iptables -A OUTPUT -p udp -d <trusted-dns> --dport 53 -j ACCEPT
 iptables -A OUTPUT -p tcp -d <trusted-dns> --dport 53 -j ACCEPT
@@ -114,15 +117,17 @@ iptables -A OUTPUT -d <deb.debian.org> -j ACCEPT
 
 # Bun
 iptables -A OUTPUT -d <bun.sh> -j ACCEPT
-iptables -A OUTPUT -d <registry.npmjs.org> -j ACCEPT
 
 # Block all UDP except DNS (prevents QUIC bypass, UDP tunneling)
 iptables -A OUTPUT -p udp -j DROP
+
+# Log dropped packets for audit trail (rate-limited)
+iptables -A OUTPUT -j LOG --log-prefix "CLAUDETAINER_DROP: " --log-level 4 -m limit --limit 5/min
 ```
 
 **Domain allowlist configuration:** The allowlist lives in `/opt/network/domains.conf` (one domain per line) on the read-only filesystem. The entrypoint resolves each domain to all returned IPs (via `dig +short`) and creates iptables rules for each. Where services publish IP ranges (e.g., GitHub's meta API), CIDR blocks are used instead of individual IPs. To add a new domain, update `domains.conf` in the repo and redeploy.
 
-**IP resolution staleness:** CDNs rotate IPs. For long-running containers, resolved IPs may become stale. Mitigations: (a) resolve all IPs returned by DNS, not just the first; (b) use CIDR blocks where available; (c) containers are expected to be short-lived (hours to days, not weeks); (d) a periodic background job (cron, every 30 minutes) re-resolves domains and updates iptables rules. This job runs as root and is not accessible to the `claude` user.
+**IP resolution staleness:** CDNs rotate IPs. For long-running containers, resolved IPs may become stale. Mitigations: (a) resolve all IPs returned by DNS, not just the first; (b) use CIDR blocks where available; (c) containers are expected to be short-lived (hours to days, not weeks); (d) a periodic background job (cron, every 30 minutes) re-resolves domains and updates iptables rules using `iptables-restore` for atomic rule replacement (no window of inconsistent state). If DNS resolution fails for a domain, the refresh keeps old IPs for that domain rather than dropping them. This job runs as root and is not accessible to the `claude` user.
 
 **DNS control:** All DNS queries go to a single trusted resolver. Queries for non-allowlisted domains still resolve (needed for the hook to show meaningful error messages), but the iptables rules prevent actual connections to non-allowlisted IPs.
 
@@ -159,14 +164,39 @@ allow:^(grep|rg|fd|find|ag)\b
 allow:^bun (run|test|build|check)\b
 allow:^(python3?|echo|pwd|cd|env|which)\b
 allow:^(wc|sort|uniq|diff|sed|awk|xargs|tee|basename|dirname)\b
-allow:^gh (pr|issue|repo view|repo clone|api)\b
+allow:^(date|file|stat|realpath|readlink|id|whoami|uname|hostname)\b
+allow:^(tar|gzip|gunzip|zip|unzip)\b
+allow:^(head|tail|wc|tee|tr|cut|paste|comm|join)\b
+allow:^gh (pr|issue|repo view|repo clone|api|run view|run list)\b
+allow:^(rm|rmdir)\b
+allow:^(mv|cp|ln)\b
+allow:^(chmod|chown)\b
+allow:^tmux\s+(list-sessions|list-windows|display-message)\b
 
 # Hard-block patterns (exit 2, cannot be approved)
-block:.*\|\s*(ba)?sh
+# Pipe to any shell/interpreter
+block:.*\|\s*/?(usr/)?(s?bin/)?(ba)?sh\b
+block:.*\|\s*/?(usr/)?(s?bin/)?(python3?|node|bun|perl|ruby)\b
+# Shell execution wrappers
+block:^(ba)?sh\s+-c\b
+block:^eval\b
+block:^exec\b
+block:^source\b
+# Destructive system operations
 block:^sudo\b
 block:^rm\s+-rf\s+/
 block:^chmod\s+777\b
+# Self-approval prevention
 block:^approve\b
+# Dangerous gh subcommands (data exfiltration vectors)
+block:^gh\s+gist\b
+block:^gh\s+repo\s+create\b
+block:^gh\s+repo\s+delete\b
+block:^gh\s+auth\b
+# tmux cross-pane injection
+block:^tmux\s+(send-keys|send-prefix|capture-pane|pipe-pane)\b
+# Prevent reading environment variables (credential leaks)
+block:^(printenv|/proc/)
 
 # Approval-required patterns (exit 2 with approval instructions)
 approve:^(apt-get|apt)\s+install\b
@@ -175,9 +205,9 @@ approve:^(pip3?|pipx)\s+install\b
 approve:^curl\b
 approve:^wget\b
 
-# Default behavior for unmatched commands
-# "allow" = auto-approve, "block" = hard-block
-default:allow
+# Default: block unmatched commands (allowlist model)
+# Use "allow" to switch to a denylist model if this is too restrictive
+default:block
 ```
 
 **Three tiers:**
@@ -216,12 +246,24 @@ Claude never sees API keys directly. A lightweight reverse proxy sidecar holds s
 
 **Sidecar architecture:**
 
-The sidecar runs as root (separate from Claude's process), listens on `127.0.0.1:4111`, and proxies requests to the Anthropic API with the real API key injected into headers.
+The sidecar is a lightweight reverse proxy (~100-200 lines, written in Go using `httputil.ReverseProxy` or similar well-audited library). It runs as root (separate from Claude's process) and exposes two endpoints:
+
+- `127.0.0.1:4111` → proxies to `api.anthropic.com` (injects `ANTHROPIC_API_KEY`)
+  - Only allows `POST /v1/messages` and `POST /v1/complete` — rejects all other paths
+- `127.0.0.1:4112` → proxies to `api.githubcopilot.com` (injects `Authorization: Bearer <GH_PAT>`)
+  - Only allows the MCP endpoint pattern — rejects all other paths
+
+The sidecar must handle SSE streaming (Anthropic API responses are server-sent events) and TLS to upstream. All requests are logged to stdout (viewable via `fly logs`). Rate-limiting is applied to detect abuse patterns.
+
+If the sidecar crashes, Claude Code gets `connection refused` — **fail-closed**. The sidecar should be supervised (e.g., via a process manager in the entrypoint, or tmux respawn).
 
 Claude's environment sees:
 - `ANTHROPIC_API_BASE_URL=http://127.0.0.1:4111` — points to the sidecar, not the real API
 - No `ANTHROPIC_API_KEY` in the environment
-- No `GH_PAT` in the environment — git credential helper configured by root (stored in `/root/.git-credentials`, unreadable by `claude`)
+- No `GH_PAT` in the environment
+- No `GH_TOKEN` in the environment
+- Git credential helper configured by root (stored in `/root/.git-credentials`, unreadable by `claude`)
+- `gh` CLI reads auth from `/root/.config/gh/hosts.yml` (root-owned, unreadable by `claude`)
 - GitHub MCP server URL points to `http://127.0.0.1:4112/mcp/` — sidecar injects the PAT
 
 **Git credential isolation:**
@@ -250,12 +292,16 @@ The `GH_PAT` is scoped to the robot GitHub account with minimum necessary permis
 
 ### Installed Tooling
 
-- **Bun** — project runtime, installed via official install script
+- **Bun** — project runtime, installed via official install script with version pinned and checksum verified
 - **Python 3** — Claude Code frequently uses it for scripting tasks
-- **Claude Code** — installed via `curl -fsSL https://claude.ai/install.sh | bash` (self-contained binary)
-- **gh** — GitHub CLI
+- **Claude Code** — installed via `curl -fsSL https://claude.ai/install.sh | bash` with version pinned and binary checksum verified post-install
+- **gh** — GitHub CLI, installed from GitHub's official apt repo with version pinned
 - **CLI tools:** jq, ripgrep, fd-find, git, curl, wget, tmux, less, tree
 - **iptables** — for network boundary enforcement
+
+### Supply Chain Hardening
+
+All install scripts fetched at build time (`curl | bash` for Claude Code, Bun) are pinned to specific versions with SHA256 checksums verified post-download. The Dockerfile uses a multi-stage build: install scripts run in a builder stage, and only verified artifacts are copied to the final image. GHCR vulnerability scanning (Trivy or Dependabot) is enabled on the repository.
 
 ### Claude Code Configuration
 
@@ -284,7 +330,9 @@ Installed at first boot by the entrypoint script via `claude plugin install supe
 | Secret | Purpose |
 |--------|---------|
 | `ANTHROPIC_API_KEY` | Held by sidecar only, never exposed to Claude |
-| `GH_PAT` | Git HTTPS auth, gh CLI, GitHub MCP server |
+| `GH_PAT` | Git HTTPS auth, gh CLI, GitHub MCP server — all via root-owned config, never in Claude's environment |
+
+**GitHub PAT scope:** The PAT must be scoped to the minimum necessary permissions: `repo` access limited to specific repositories only, no `gist` scope, no `admin` scope, no `delete_repo` scope, no `workflow` scope. The robot account should not have admin access to any organization or repository.
 
 ### Environment Variables (via `fly machine run --env`)
 
@@ -315,7 +363,7 @@ Installed at first boot by the entrypoint script via `claude plugin install supe
    - Start the approval daemon on Unix socket `/run/claude-approval.sock`
 4. **Claude Code setup:**
    - Copy settings template from `/opt/claude/settings.json` to `/home/claude/.claude/settings.json` (tmpfs)
-   - Export `GH_TOKEN=$GH_PAT` for gh CLI
+   - Configure `gh` CLI auth: `echo "$GH_PAT" | gh auth login --with-token` writing to `/root/.config/gh/hosts.yml` (root-owned, mode 600). The `claude` user can invoke `gh` which reads system-level config, but cannot read the token file directly.
    - Install superpowers plugin (log warning on failure)
 5. **Session startup:**
    - Start tmux session as `claude` user with `remain-on-exit on`
@@ -376,7 +424,8 @@ claudetainer/
 │   └── approval-daemon        # Root-owned daemon: manages approval tokens
 ├── network/
 │   ├── domains.conf           # Domain allowlist (one per line)
-│   └── refresh-iptables.sh    # Cron script: re-resolves domains, updates rules
+│   └── refresh-iptables.sh    # Cron script: re-resolves domains, atomic iptables-restore
+├── status                     # CLI tool: shows active approvals, recent blocks, sidecar health
 ├── seccomp-profile.json       # Seccomp policy (blocks bpf, mount, ptrace, etc.)
 └── claude-settings.json       # Claude Code settings template (no secrets)
 ```
@@ -393,9 +442,29 @@ claudetainer/
 | `approve` | CLI tool: sends approval hash to daemon via Unix socket |
 | `approval-daemon` | Root-owned: listens on Unix socket, writes tokens to root-owned directory |
 | `domains.conf` | Network allowlist: domains whose IPs are permitted through iptables |
-| `refresh-iptables.sh` | Cron job (every 30m): re-resolves domains, updates iptables rules |
+| `refresh-iptables.sh` | Cron job (every 30m): re-resolves domains, atomic `iptables-restore` |
+| `status` | CLI tool: shows active approvals, recent blocks, sidecar health |
 | `seccomp-profile.json` | Kernel syscall restrictions (blocks bpf, mount, ptrace, etc.) |
 | `claude-settings.json` | Claude Code settings template: hook config + MCP servers (no secrets) |
+
+## Observability & Audit Trail
+
+**Hook logging:** All hook decisions (allow, block, approve-required) are logged to stderr with timestamps, the matched rule, and the full command. These are captured by Claude Code's output and visible via `fly logs`.
+
+**iptables logging:** Dropped packets are logged with the prefix `CLAUDETAINER_DROP:` (rate-limited to 5/min to prevent log flooding). Viewable via `fly logs` or `dmesg`.
+
+**Sidecar logging:** All proxied requests are logged to stdout with timestamp, method, path, and response status. Viewable via `fly logs`.
+
+**Approval logging:** The approval daemon logs all approval requests (who approved what, when) to stdout.
+
+**Monitoring command:** Users can run `! status` (a script at `/usr/local/bin/status`) to see: active approval tokens, recent blocked commands, recent iptables drops, sidecar health.
+
+## Operational Security Notes
+
+- **SSH access:** Fly.io org membership controls who can `fly ssh console`. All human sessions connect as root (Fly default), but Claude runs as unprivileged user `claude` in tmux.
+- **tmux hygiene:** Users should not type secrets in the Claude tmux session. Tmux scrollback could be read by Claude via `tmux capture-pane` (which is hard-blocked in rules.conf).
+- **CI/CD token rotation:** The `FLY_API_TOKEN` GitHub secret should be rotated regularly. If compromised, an attacker can deploy arbitrary images. Consider OIDC federation if Fly supports it.
+- **Claude-authored PRs:** All commits use the robot git identity. Require human code review for all merges — no auto-merge. Claude should not be able to modify `.github/workflows/` files (CI configs) — add this path to a block pattern if needed.
 
 ## Security Properties Summary
 
@@ -407,12 +476,21 @@ claudetainer/
 | Claude connects to unknown domains | iptables `OUTPUT DROP` default, explicit allowlist |
 | Claude exfiltrates via DNS | DNS restricted to trusted resolver, UDP blocked except DNS |
 | Claude exfiltrates API keys | Sidecar holds keys, never in Claude's environment or config files |
-| Claude exfiltrates GitHub PAT | PAT not in environment or settings.json; MCP routed through sidecar |
+| Claude exfiltrates GitHub PAT | PAT not in env, settings, or any Claude-readable file; gh/MCP via root-owned config/sidecar |
+| Claude reads PAT from /proc | No secrets in Claude's environment; `/proc/self/environ` contains nothing sensitive |
 | Claude runs `sudo`, `rm -rf /` | Hook hard-blocks destructive commands |
+| Claude bypasses hook via eval/sh -c | `eval`, `exec`, `source`, `sh -c`, `bash -c` all hard-blocked |
+| Claude uses unknown command | `default:block` — unmatched commands are blocked (allowlist model) |
 | Claude installs malicious package | Hook requires per-command approval for all install commands |
 | Claude self-approves commands | `approve` blocked by hook; token directory root-owned (mode 0700) |
 | Claude forges approval tokens | Token directory writable only by root-owned approval daemon |
 | Claude bypasses via QUIC/UDP | All UDP dropped except DNS |
+| Claude injects into other tmux panes | `tmux send-keys/capture-pane/pipe-pane` hard-blocked |
+| Claude exfiltrates via gh gist/repo | `gh gist`, `gh repo create`, `gh repo delete`, `gh auth` hard-blocked |
+| Claude accesses cloud metadata | `169.254.0.0/16` explicitly dropped in iptables |
 | Sidecar/daemon/hook killed | Claude lacks capabilities to signal root-owned processes |
+| Sidecar compromised | Sidecar validates request paths (only expected API endpoints); rate-limited; logged |
 | iptables modified | Claude lacks `CAP_NET_ADMIN` |
-| CDN IP rotation breaks allowlist | Background cron re-resolves domains every 30 minutes |
+| CDN IP rotation breaks allowlist | Background cron re-resolves with atomic `iptables-restore` every 30 minutes |
+| Supply chain compromise at build | Version-pinned installs with SHA256 verification; multi-stage Docker build; GHCR scanning |
+| Blocked command not visible to user | All hook decisions logged with matched rule; `! status` command for overview |
