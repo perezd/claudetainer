@@ -6,7 +6,7 @@ A Docker container deployed to Fly.io that provides a persistent, interactive Cl
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ Fly Machine (shared-cpu-1x, 512MB)                           │
+│ Fly Machine (shared-cpu-1x, 1GB)                           │
 │                                                              │
 │  entrypoint.sh (runs as root)                                │
 │    ├── configure iptables (OUTPUT DROP default)              │
@@ -89,9 +89,13 @@ iptables -A OUTPUT -o lo -j ACCEPT
 # Block cloud metadata services (Fly.io, AWS, GCP, Azure)
 iptables -A OUTPUT -d 169.254.0.0/16 -j DROP
 
-# Allow DNS to trusted resolver only
-iptables -A OUTPUT -p udp -d <trusted-dns> --dport 53 -j ACCEPT
-iptables -A OUTPUT -p tcp -d <trusted-dns> --dport 53 -j ACCEPT
+# Block Fly.io private networking (prevent lateral movement to other machines)
+iptables -A OUTPUT -d fdaa::/16 -j DROP
+iptables -A OUTPUT -d 172.16.0.0/12 -j DROP
+
+# Allow DNS to local filtering resolver only (CoreDNS on localhost)
+iptables -A OUTPUT -p udp -d 127.0.0.53 --dport 53 -j ACCEPT
+iptables -A OUTPUT -p tcp -d 127.0.0.53 --dport 53 -j ACCEPT
 
 # Allow established/related connections
 iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
@@ -129,9 +133,9 @@ iptables -A OUTPUT -j LOG --log-prefix "CLAUDETAINER_DROP: " --log-level 4 -m li
 
 **IP resolution staleness:** CDNs rotate IPs. For long-running containers, resolved IPs may become stale. Mitigations: (a) resolve all IPs returned by DNS, not just the first; (b) use CIDR blocks where available; (c) containers are expected to be short-lived (hours to days, not weeks); (d) a periodic background job (cron, every 30 minutes) re-resolves domains and updates iptables rules using `iptables-restore` for atomic rule replacement (no window of inconsistent state). If DNS resolution fails for a domain, the refresh keeps old IPs for that domain rather than dropping them. This job runs as root and is not accessible to the `claude` user.
 
-**DNS control:** All DNS queries go to a single trusted resolver. Queries for non-allowlisted domains still resolve (needed for the hook to show meaningful error messages), but the iptables rules prevent actual connections to non-allowlisted IPs.
+**DNS control:** A local **CoreDNS** instance runs on `127.0.0.53` and acts as the container's sole DNS resolver. CoreDNS is configured to only forward queries for domains listed in `domains.conf` to an upstream resolver — queries for all other domains return `NXDOMAIN`. This closes the DNS exfiltration channel: Claude cannot encode data in DNS query labels to attacker-controlled domains because those queries never leave the container. The CoreDNS config and upstream resolver settings live on the read-only root filesystem.
 
-**What this eliminates:** Unauthorized outbound connections, DNS exfiltration via direct UDP, QUIC/HTTP3 bypass, connections to unknown domains regardless of how they're initiated (curl, wget, Python requests, Node fetch, raw sockets — all caught at the IP level).
+**What this eliminates:** Unauthorized outbound connections, DNS exfiltration via query labels, QUIC/HTTP3 bypass, connections to unknown domains regardless of how they're initiated (curl, wget, Python requests, Node fetch, raw sockets — all caught at both DNS and IP levels). The two layers (DNS filtering + iptables) provide defense-in-depth: even if one layer has a gap, the other catches it.
 
 **Fail-closed:** If the entrypoint fails to configure iptables, the default policy is DROP — no traffic flows.
 
@@ -176,7 +180,6 @@ allow:^(rm|rmdir)\b
 allow:^(mv|cp|ln)\b
 allow:^(chmod|chown)\b
 allow:^tmux\s+(list-sessions|list-windows|display-message)\b
-allow:^env\s+\S+=
 
 # Hard-block patterns (exit 2, cannot be approved)
 # Pipe to any shell/interpreter
@@ -200,9 +203,9 @@ block:^gh\s+auth\b
 block:^gh\s+api\b
 # tmux cross-pane injection
 block:^tmux\s+(send-keys|send-prefix|capture-pane|pipe-pane)\b
-# Prevent reading environment variables (credential leaks)
-block:^(printenv|/proc/)
-block:^env$
+# Prevent reading environment variables and /proc (credential leaks)
+block:^(printenv|env$)
+block:.*/proc/
 
 # Approval-required patterns (exit 2 with approval instructions)
 approve:^(apt-get|apt)\s+install\b
@@ -309,6 +312,7 @@ The `GH_PAT` is scoped to the robot GitHub account with minimum necessary permis
 - **gh** — GitHub CLI, installed from GitHub's official apt repo with version pinned
 - **CLI tools:** jq, ripgrep, fd-find, git, curl, wget, tmux, less, tree
 - **iptables** — for network boundary enforcement
+- **CoreDNS** — local DNS resolver that only resolves allowlisted domains
 
 ### Supply Chain Hardening
 
@@ -368,9 +372,11 @@ Installed at first boot by the entrypoint script via `claude plugin install supe
 `/usr/local/bin/entrypoint.sh` runs as root and performs:
 
 1. **Network lockdown:**
+   - Start CoreDNS on `127.0.0.53` with config from `/opt/network/Corefile` — only resolves domains listed in `domains.conf`, all others return NXDOMAIN
    - Read `/opt/network/domains.conf`, resolve each domain to all IPs via `dig +short`
    - Apply iptables rules: `OUTPUT DROP` default, explicit ACCEPT for resolved IPs
-   - Block all UDP except DNS to trusted resolver
+   - Block Fly private networking (`fdaa::/16`, `172.16.0.0/12`) and cloud metadata (`169.254.0.0/16`)
+   - Block all UDP except DNS to local CoreDNS
    - Start background cron job to re-resolve domains every 30 minutes
 2. **Git configuration:**
    - Write `$GH_PAT` to `/root/.git-credentials` (root-owned, mode 600)
@@ -443,7 +449,8 @@ claudetainer/
 │   ├── approve                # CLI tool: sends approval requests to daemon
 │   └── approval-daemon        # Root-owned daemon: manages approval tokens
 ├── network/
-│   ├── domains.conf           # Domain allowlist (one per line)
+│   ├── domains.conf           # Domain allowlist (one per line, shared by iptables + CoreDNS)
+│   ├── Corefile                # CoreDNS config: only resolves allowlisted domains
 │   └── refresh-iptables.sh    # Cron script: re-resolves domains, atomic iptables-restore
 ├── status                     # CLI tool: shows active approvals, recent blocks, sidecar health
 ├── seccomp-profile.json       # Seccomp policy (blocks bpf, mount, ptrace, etc.)
@@ -484,7 +491,18 @@ claudetainer/
 - **SSH access:** Fly.io org membership controls who can `fly ssh console`. All human sessions connect as root (Fly default), but Claude runs as unprivileged user `claude` in tmux.
 - **tmux hygiene:** Users should not type secrets in the Claude tmux session. Tmux scrollback could be read by Claude via `tmux capture-pane` (which is hard-blocked in rules.conf).
 - **CI/CD token rotation:** The `FLY_API_TOKEN` GitHub secret should be rotated regularly. If compromised, an attacker can deploy arbitrary images. Consider OIDC federation if Fly supports it.
-- **Claude-authored PRs:** All commits use the robot git identity. Require human code review for all merges — no auto-merge. Claude should not be able to modify `.github/workflows/` files (CI configs) — add this path to a block pattern if needed.
+- **Claude-authored PRs:** All commits use the robot git identity. Require human code review for all merges — no auto-merge. Human code review is a **critical security boundary**, not optional — Claude can write arbitrary code to `/workspace`, and review is the last line of defense before that code runs in unrestricted environments.
+- **No published ports:** The `fly.toml` must not contain a `[services]` or `[[services]]` block. No ports should be exposed to the internet. The sidecar endpoints (`:4111`, `:4112`) must only be accessible on localhost.
+- **Fly private networking:** iptables blocks Fly's internal network ranges (`fdaa::/16`, `172.16.0.0/12`) to prevent lateral movement to other machines in the same org.
+
+## Emergency Procedures
+
+**Kill switch:** If suspicious behavior is detected:
+1. `fly machine stop <machine-id>` — immediately stops the VM, killing all processes
+2. Alternatively from inside the session: `kill -9 -1` as root kills all UID 1000 processes
+3. The ephemeral workspace is lost, but `fly logs` retains hook/sidecar/iptables audit logs for forensic review
+
+**Session recording:** tmux is configured to log all pane output to `/tmp/tmux-session.log`. This file is on tmpfs (lost on restart) but provides a forensic trail during the session. For persistent session recording, pipe `fly logs` to an external log aggregator.
 
 ## Security Properties Summary
 
@@ -494,7 +512,11 @@ claudetainer/
 | Claude escalates to root | Non-root user + `no-new-privileges` + capability drop |
 | Claude loads eBPF/kernel modules | Seccomp blocks `bpf()`, `mount()` |
 | Claude connects to unknown domains | iptables `OUTPUT DROP` default, explicit allowlist |
-| Claude exfiltrates via DNS | DNS restricted to trusted resolver, UDP blocked except DNS |
+| Claude exfiltrates via DNS query labels | Local CoreDNS only resolves allowlisted domains; non-allowlisted queries return NXDOMAIN |
+| Claude uses Python to make DNS queries | CoreDNS filters at resolver level; queries for attacker domains never leave the container |
+| Claude uses `env` or `cat /proc/` to read secrets | `env` (bare) blocked; `/proc/` blocked anywhere in command; no secrets in Claude's env |
+| Claude uses `env VAR=val cmd` to bypass hook | `env` with arguments falls to default:block (no allow rule for env) |
+| Claude reaches other Fly machines | Fly private network ranges (fdaa::/16, 172.16.0.0/12) blocked in iptables |
 | Claude exfiltrates API keys | Sidecar holds keys, never in Claude's environment or config files |
 | Claude exfiltrates GitHub PAT | PAT readable via gh config but scoped to specific repos; gh api/gist blocked; can't reach non-allowlisted domains |
 | Claude reads secrets from /proc | No high-value secrets in Claude's environment; Anthropic key fully isolated in sidecar |
