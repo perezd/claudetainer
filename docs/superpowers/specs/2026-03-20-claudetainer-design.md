@@ -62,7 +62,7 @@ The base image is **read-only**. Claude runs as an unprivileged user with all ca
 | `/home/claude/.cache` | tmpfs (1GB) | Build caches (Bun, pip, etc.) |
 | `/home/claude/.claude` | tmpfs (64MB) | Claude Code config (settings.json, populated at boot) |
 
-Everything else (system binaries, hook scripts, rules.conf, settings.json, the `approve` binary) is immutable at runtime.
+Everything else (system binaries, hook scripts, rules.conf, the `approve` binary) is immutable at runtime. The settings.json copy on the `/home/claude/.claude` tmpfs is root-owned (mode 644) — Claude can read it but not modify it.
 
 **User and capabilities:**
 
@@ -266,7 +266,7 @@ The sidecar is a lightweight reverse proxy (~100-200 lines, written in Go using 
 
 The sidecar must handle SSE streaming (Anthropic API responses are server-sent events) and TLS to upstream. All requests are logged to stdout (viewable via `fly logs`). Rate-limiting is applied to detect abuse patterns.
 
-If the sidecar crashes, Claude Code gets `connection refused` — **fail-closed**. The sidecar should be supervised (e.g., via a process manager in the entrypoint, or tmux respawn).
+If the sidecar crashes, Claude Code gets `connection refused` — **fail-closed**. The sidecar and approval daemon are supervised by a simple bash restart loop in the entrypoint, ensuring they are automatically restarted if they crash.
 
 Claude's environment sees:
 - `ANTHROPIC_API_BASE_URL=http://127.0.0.1:4111` — points to the sidecar, not the real API
@@ -382,7 +382,7 @@ Installed at first boot by the entrypoint script via `claude plugin install supe
      - `127.0.0.1:4112` → proxies to `api.githubcopilot.com` (injects `GH_PAT`)
    - Start the approval daemon on Unix socket `/run/claude-approval.sock`
 4. **Claude Code setup:**
-   - Copy settings template from `/opt/claude/settings.json` to `/home/claude/.claude/settings.json` (tmpfs)
+   - Copy settings template from `/opt/claude/settings.json` to `/home/claude/.claude/settings.json` (tmpfs, root-owned, mode 644 — Claude can read but not modify, preventing hook removal mid-session)
    - Configure `gh` CLI auth: `echo "$GH_PAT" | gh auth login --with-token` writing to `/opt/gh-config/hosts.yml` (root-owned directory, mode 711; file mode 644 so `claude` can read config but the token is embedded). Set `GH_CONFIG_DIR=/opt/gh-config` in Claude's environment. Note: since `gh api` is hard-blocked and the PAT is scoped to specific repos with minimal permissions, the token being readable via `gh config` is an accepted risk — Claude cannot exfiltrate it to non-allowlisted domains, and the `default:block` policy prevents using arbitrary commands to read it. The primary secrets (Anthropic API key) are fully isolated in the sidecar.
    - Install superpowers plugin (log warning on failure)
 5. **Session startup:**
