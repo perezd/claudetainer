@@ -706,7 +706,7 @@ git commit -m "feat: add Dockerfile with all security layers"
 
 ```toml
 app = "claudetainer"
-primary_region = "ewr"
+primary_region = "sjc"
 
 [build]
   dockerfile = "Dockerfile"
