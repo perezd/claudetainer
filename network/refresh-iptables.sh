@@ -29,7 +29,6 @@ while IFS= read -r domain || [[ -n "$domain" ]]; do
 done < "$DOMAINS_FILE"
 
 echo "-A OUTPUT -p udp -j DROP" >> "$RULES_FILE"
-echo '-A OUTPUT -j LOG --log-prefix "CLAUDETAINER_DROP: " --log-level 4 -m limit --limit 5/min' >> "$RULES_FILE"
 echo "COMMIT" >> "$RULES_FILE"
 
 iptables-restore < "$RULES_FILE"
