@@ -1,0 +1,23 @@
+{
+  "includeCoAuthoredBy": false,
+  "mcpServers": {
+    "bun-docs": {
+      "type": "http",
+      "url": "https://bun.com/docs/mcp"
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/opt/approval/check-command.sh",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  }
+}
