@@ -187,7 +187,7 @@ allow:^(wc|sort|uniq|diff|sed|awk|tee|basename|dirname)\b
 allow:^(date|file|stat|realpath|readlink|id|whoami|uname|hostname)\b
 allow:^(tar|gzip|gunzip|zip|unzip)\b
 allow:^(tr|cut|paste|comm|join)\b
-allow:^gh\s+(pr|issue|repo view|repo clone|run view|run list)\b
+allow:^gh\s+(pr|issue|repo view|repo clone|run view|run list|api)\b
 allow:^(rm|rmdir)\b
 allow:^(mv|cp|ln)\b
 allow:^(chmod|chown)\b
@@ -212,7 +212,6 @@ block:^approve\b
 block:^gh\s+gist\b
 block:^gh\s+repo\s+(create|delete)\b
 block:^gh\s+auth\b
-block:^gh\s+api\b
 # tmux cross-pane injection
 block:^tmux\s+(send-keys|send-prefix|capture-pane|pipe-pane)\b
 # Prevent reading environment variables and /proc (credential leaks)
@@ -521,7 +520,7 @@ claudetainer/
 | Claude runs `approve` via Bash tool | `block:^approve\b` in hook; `!` shell escape bypasses hooks (human-only) |
 | Claude uses command chaining to bypass hook | Hook splits compound commands (`;`, `&&`, `\|\|`, `$()`) and evaluates each sub-command independently |
 | Claude exfiltrates via `git push` | `git push` requires approval; PAT scoped to specific repos only |
-| Claude bypasses gh blocks via `gh api` | `gh api` is hard-blocked |
+| Claude abuses `gh api` | Fine-grained PAT scope is the enforcement boundary; `gh api` can only do what the PAT allows |
 | Claude runs `sudo`, `rm -rf /` | Hook hard-blocks destructive commands |
 | Claude bypasses hook via eval/sh -c | `eval`, `exec`, `source`, `sh -c`, `bash -c` all hard-blocked |
 | Claude uses unknown command | `default:block` — unmatched commands are blocked (allowlist model) |
