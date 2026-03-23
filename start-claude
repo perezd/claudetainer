@@ -13,7 +13,7 @@ if ! su -s /bin/bash claude -c "HOME=$CLAUDE_HOME claude auth status" >/dev/null
   echo ""
   echo "=== Claude Code Authentication Required ==="
   echo ""
-  su -s /bin/bash claude -c "HOME=$CLAUDE_HOME claude auth login"
+  su -s /bin/bash -l claude -c "HOME=$CLAUDE_HOME claude auth login" </dev/tty
   echo ""
 fi
 
