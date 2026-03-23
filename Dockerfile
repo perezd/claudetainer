@@ -2,7 +2,7 @@ FROM debian:bookworm-slim
 
 # System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash ca-certificates curl dnsutils fd-find git iptables \
+    bash ca-certificates curl dnsutils fd-find git iptables sudo \
     jq less python3 ripgrep tmux tree unzip wget xxd \
     && rm -rf /var/lib/apt/lists/*
 
