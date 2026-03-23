@@ -7,12 +7,13 @@ echo "[ENTRYPOINT] Starting claudetainer..."
 # Mount tmpfs at writable paths before anything else
 mount -t tmpfs -o size=512m tmpfs /workspace
 mount -t tmpfs -o size=128m tmpfs /tmp
-mount -t tmpfs -o size=256m tmpfs /home/claude/.cache
-mount -t tmpfs -o size=64m tmpfs /home/claude/.claude
+mount -t tmpfs -o size=256m tmpfs /home/claude
 chmod 1777 /tmp
 
-# Set ownership (except .claude which stays root-owned)
-chown claude:claude /workspace /home/claude/.cache
+# Set ownership and create subdirectories
+chown claude:claude /workspace /home/claude
+mkdir -p /home/claude/.cache /home/claude/.claude /home/claude/.local
+chown claude:claude /home/claude/.cache /home/claude/.claude /home/claude/.local
 
 # === 2. Network lockdown ===
 
@@ -79,7 +80,10 @@ mkdir -p /run/claude-approved
 
 # === 5. Claude Code setup ===
 
-# Copy settings template (root-owned, mode 644 — Claude can read but not modify)
+# Copy settings template into claude-owned .claude directory
+# Claude Code needs to write state files here (preferences, sessions, etc.)
+# settings.json is root-owned so hook config can't be modified, but claude
+# can delete and recreate it (accepted risk — iptables is the real enforcement)
 cp /opt/claude/settings.json /home/claude/.claude/settings.json
 chown root:root /home/claude/.claude/settings.json
 chmod 644 /home/claude/.claude/settings.json

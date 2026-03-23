@@ -31,14 +31,16 @@ RUN useradd -m -s /bin/bash -u 1000 claude
 USER claude
 RUN curl -fsSL https://bun.sh/install | bash
 USER root
-RUN ln -s /home/claude/.bun/bin/bun /usr/local/bin/bun \
-    && ln -s /home/claude/.bun/bin/bunx /usr/local/bin/bunx
+# Copy bun binaries to shared location (not symlinks — /home/claude is tmpfs at runtime)
+RUN cp -L /home/claude/.bun/bin/bun /usr/local/bin/bun \
+    && cp -L /home/claude/.bun/bin/bunx /usr/local/bin/bunx
 
 # Claude Code (install as claude user)
 USER claude
 RUN curl -fsSL https://claude.ai/install.sh | bash
 USER root
-RUN ln -s /home/claude/.local/bin/claude /usr/local/bin/claude
+# Copy claude binary to shared location (follows symlink to versioned binary)
+RUN cp -L /home/claude/.local/bin/claude /usr/local/bin/claude
 
 # Start-claude script: handles auth, tmux creation, and attach
 COPY start-claude /usr/local/bin/start-claude
