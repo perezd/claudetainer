@@ -40,9 +40,10 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 USER root
 RUN ln -s /home/claude/.local/bin/claude /usr/local/bin/claude
 
-# Auto-attach to tmux on SSH login
-RUN echo 'export TERM=xterm-256color; if tmux -S /tmp/tmux-1000/default has-session -t claude 2>/dev/null; then exec tmux -S /tmp/tmux-1000/default attach -t claude; fi' \
-    >> /root/.bashrc
+# Start-claude script: handles auth, tmux creation, and attach
+COPY start-claude /usr/local/bin/start-claude
+RUN chmod +x /usr/local/bin/start-claude \
+    && echo 'export TERM=xterm-256color; exec /usr/local/bin/start-claude' >> /root/.bashrc
 
 # Approval system
 COPY approval/ /opt/approval/

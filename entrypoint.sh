@@ -87,39 +87,14 @@ mount -o remount,ro /
 echo "[ENTRYPOINT] Root filesystem locked (read-only)"
 
 # === 7. Clone repo (optional) ===
-WORK_DIR="/workspace"
 if [[ -n "${REPO_URL:-}" ]]; then
   echo "[ENTRYPOINT] Cloning $REPO_URL..."
   su -s /bin/bash claude -c "git clone '$REPO_URL' /workspace/repo" || \
     echo "[ENTRYPOINT] WARNING: Failed to clone $REPO_URL" >&2
-  if [[ -d /workspace/repo ]]; then
-    WORK_DIR="/workspace/repo"
-  fi
 fi
 
-# === 8. Session startup ===
+echo "[ENTRYPOINT] Ready. Waiting for SSH connections..."
+echo "[ENTRYPOINT] Run 'fly ssh console -a <app>' to connect."
 
-# tmux config (already on tmpfs at /tmp)
-cat > /tmp/.tmux.conf <<'TMUX'
-set -g remain-on-exit on
-set -g history-limit 50000
-set -g default-terminal "xterm-256color"
-TMUX
-
-# Start Claude Code in tmux as the claude user
-su -s /bin/bash claude -c "
-  export GH_CONFIG_DIR=/opt/gh-config
-  export HOME=/home/claude
-  cd '$WORK_DIR'
-  tmux -f /tmp/.tmux.conf new-session -d -s claude 'claude --dangerously-skip-permissions'
-"
-
-echo "[ENTRYPOINT] Claude Code session started. Waiting for SSH connections..."
-
-# Install superpowers plugin in the background (non-blocking)
-(su -s /bin/bash claude -c 'claude plugin install superpowers@claude-plugins-official 2>/dev/null' || \
-  echo "[ENTRYPOINT] WARNING: Failed to install superpowers plugin" >&2) &
-
-# Keep the container alive — the entrypoint is PID 1
-# SSH users auto-attach to tmux via .bashrc
+# Keep the container alive — SSH users get start-claude via .bashrc
 exec sleep infinity

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+TMUX_SOCKET="/tmp/tmux-1000/default"
+CLAUDE_HOME="/home/claude"
+
+# If tmux session already exists, just attach
+if tmux -S "$TMUX_SOCKET" has-session -t claude 2>/dev/null; then
+  exec tmux -S "$TMUX_SOCKET" attach -t claude
+fi
+
+# First time: ensure Claude Code is authenticated
+if ! su -s /bin/bash claude -c "HOME=$CLAUDE_HOME claude auth status" >/dev/null 2>&1; then
+  echo ""
+  echo "=== Claude Code Authentication Required ==="
+  echo ""
+  su -s /bin/bash claude -c "HOME=$CLAUDE_HOME claude auth login"
+  echo ""
+fi
+
+# Write tmux config
+cat > /tmp/.tmux.conf <<'TMUX'
+set -g remain-on-exit on
+set -g history-limit 50000
+set -g default-terminal "xterm-256color"
+TMUX
+
+# Determine working directory
+WORK_DIR="/workspace"
+if [[ -d /workspace/repo ]]; then
+  WORK_DIR="/workspace/repo"
+fi
+
+# Start Claude Code in tmux as the claude user
+su -s /bin/bash claude -c "
+  export GH_CONFIG_DIR=/opt/gh-config
+  export HOME=$CLAUDE_HOME
+  cd '$WORK_DIR'
+  tmux -f /tmp/.tmux.conf new-session -d -s claude 'claude --dangerously-skip-permissions'
+"
+
+# Attach
+exec tmux -S "$TMUX_SOCKET" attach -t claude
