@@ -27,6 +27,9 @@ while IFS= read -r domain || [[ -n "$domain" ]]; do
   cat >> "$COREFILE" <<EOF
 
 ${domain} {
+    template IN AAAA {
+        rcode NOERROR
+    }
     forward . 8.8.8.8 1.1.1.1
     log
     cache 300
