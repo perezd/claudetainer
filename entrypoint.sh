@@ -113,6 +113,7 @@ TMUX
 su -s /bin/bash claude -c "
   export GH_CONFIG_DIR=/opt/gh-config
   export HOME=/home/claude
+  export PATH=/root/.local/bin:/root/.bun/bin:\$PATH
   cd '$WORK_DIR'
   tmux -f /tmp/.tmux.conf new-session -d -s claude 'claude --dangerously-skip-permissions'
 "
