@@ -9,16 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # just (not in Debian repos — install from official prebuilt binary)
 RUN curl -fsSL https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 
-# Bun
-RUN curl -fsSL https://bun.sh/install | bash \
-    && ln -s /root/.bun/bin/bun /usr/local/bin/bun \
-    && ln -s /root/.bun/bin/bunx /usr/local/bin/bunx
-ENV PATH="/root/.bun/bin:${PATH}"
-
-# Claude Code
-RUN curl -fsSL https://claude.ai/install.sh | bash \
-    && ln -s /root/.local/bin/claude /usr/local/bin/claude
-
 # gh CLI
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
@@ -34,8 +24,21 @@ RUN ARCH=$(dpkg --print-architecture) && \
     | tar -xz -C /usr/local/bin/ \
     && chmod +x /usr/local/bin/coredns
 
-# Create claude user
+# Create claude user before installing user-level tools
 RUN useradd -m -s /bin/bash -u 1000 claude
+
+# Bun (install as claude user)
+USER claude
+RUN curl -fsSL https://bun.sh/install | bash
+USER root
+RUN ln -s /home/claude/.bun/bin/bun /usr/local/bin/bun \
+    && ln -s /home/claude/.bun/bin/bunx /usr/local/bin/bunx
+
+# Claude Code (install as claude user)
+USER claude
+RUN curl -fsSL https://claude.ai/install.sh | bash
+USER root
+RUN ln -s /home/claude/.local/bin/claude /usr/local/bin/claude
 
 # Auto-attach to tmux on SSH login
 RUN echo 'if tmux -S /tmp/tmux-1000/default has-session -t claude 2>/dev/null; then exec tmux -S /tmp/tmux-1000/default attach -t claude; fi' \
