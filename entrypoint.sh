@@ -81,10 +81,6 @@ cp /opt/claude/settings.json /home/claude/.claude/settings.json
 chown root:root /home/claude/.claude/settings.json
 chmod 644 /home/claude/.claude/settings.json
 
-# Install superpowers plugin
-su -s /bin/bash claude -c 'claude plugin install superpowers@claude-plugins-official 2>/dev/null' || \
-  echo "[ENTRYPOINT] WARNING: Failed to install superpowers plugin" >&2
-
 # === 6. Lock filesystem ===
 # After all setup, remount root as read-only
 mount -o remount,ro /
@@ -113,12 +109,15 @@ TMUX
 su -s /bin/bash claude -c "
   export GH_CONFIG_DIR=/opt/gh-config
   export HOME=/home/claude
-  export PATH=/root/.local/bin:/root/.bun/bin:\$PATH
   cd '$WORK_DIR'
   tmux -f /tmp/.tmux.conf new-session -d -s claude 'claude --dangerously-skip-permissions'
 "
 
 echo "[ENTRYPOINT] Claude Code session started. Waiting for SSH connections..."
+
+# Install superpowers plugin in the background (non-blocking)
+(su -s /bin/bash claude -c 'claude plugin install superpowers@claude-plugins-official 2>/dev/null' || \
+  echo "[ENTRYPOINT] WARNING: Failed to install superpowers plugin" >&2) &
 
 # Keep the container alive — the entrypoint is PID 1
 # SSH users auto-attach to tmux via .bashrc
