@@ -1,6 +1,7 @@
 # Default: return NXDOMAIN for all queries
 # Per-domain forward blocks are appended by the entrypoint
 . {
+    bind 127.0.0.53
     log
     errors
     template IN A . {
