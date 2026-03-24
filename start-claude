@@ -23,10 +23,16 @@ fi
 
 # Write tmux config
 cat > /tmp/.tmux.conf <<'TMUX'
+set -g status off
 set -g remain-on-exit on
 set -g history-limit 50000
-set -g default-terminal "xterm-256color"
+set -g default-terminal "tmux-256color"
+set -ga terminal-overrides ",xterm-256color:Tc"
+set -g mouse on
 set -g allow-passthrough on
+set -g aggressive-resize on
+set -sg escape-time 0
+set -g focus-events on
 TMUX
 
 # Determine working directory
