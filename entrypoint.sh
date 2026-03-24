@@ -27,6 +27,8 @@ chown -R claude:claude /home/claude/.cache /home/claude/.claude /home/claude/.lo
 
 # Shell prompt: path relative to repo root + git branch
 cat > /home/claude/.bashrc <<'BASHRC'
+export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH"
+
 __ps1_path() {
   local git_root
   git_root=$(git rev-parse --show-toplevel 2>/dev/null) || { echo '\w'; return; }
@@ -137,6 +139,13 @@ chmod 1777 /run/claude-approved
 # (accepted risk: iptables is the real enforcement, hooks are defense-in-depth)
 cp /opt/claude/settings.json /home/claude/.claude/settings.json
 chown claude:claude /home/claude/.claude/settings.json
+
+# Seed pre-installed plugins (built into image, avoids runtime cloning)
+if [ -d /opt/claude-plugins ] && [ "$(ls -A /opt/claude-plugins 2>/dev/null)" ]; then
+  mkdir -p /home/claude/.claude/plugins
+  cp -r /opt/claude-plugins/* /home/claude/.claude/plugins/
+  chown -R claude:claude /home/claude/.claude/plugins
+fi
 
 # Write Claude Code state (onboarding skip + project trust written after clone below)
 echo '{"hasCompletedOnboarding": true}' > /home/claude/.claude.json

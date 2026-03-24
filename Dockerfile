@@ -67,6 +67,14 @@ USER claude
 RUN claude install 2>/dev/null || true
 USER root
 
+# Pre-clone plugins at build time (public repos, no auth needed)
+# Claude Code expects: marketplace at plugins/marketplaces/<name>/, plugin at plugins/cache/<marketplace>/<plugin>/<version>/
+RUN mkdir -p /opt/claude-plugins/marketplaces /opt/claude-plugins/cache/claude-plugins-official \
+    && git clone --depth 1 https://github.com/anthropics/claude-plugins-official.git \
+       /opt/claude-plugins/marketplaces/claude-plugins-official \
+    && git clone --depth 1 https://github.com/obra/superpowers.git \
+       /opt/claude-plugins/cache/claude-plugins-official/superpowers
+
 # Start-claude script: handles auth, tmux creation, and attach
 COPY start-claude /usr/local/bin/start-claude
 RUN chmod +x /usr/local/bin/start-claude
