@@ -69,8 +69,8 @@ echo "nameserver 127.0.0.53" > /etc/resolv.conf
 # === 3. Git configuration ===
 
 echo "https://${GH_PAT}@github.com" > /root/.git-credentials
-chmod 600 /root/.git-credentials
-git config --system "credential.https://github.com.helper" 'store --file=/root/.git-credentials'
+chmod 644 /root/.git-credentials
+git config --system credential.helper 'store --file=/root/.git-credentials'
 git config --system user.name "${GIT_USER_NAME:-claudetainer}"
 git config --system user.email "${GIT_USER_EMAIL:-claudetainer@noreply.github.com}"
 
