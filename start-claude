@@ -44,26 +44,26 @@ if [[ -d /workspace/repo ]]; then
   WORK_DIR="/workspace/repo"
 fi
 
-# Install plugins (first run only — skips if already installed)
+# Install plugins (first run only)
 echo "Installing plugins..."
-su -s /bin/bash claude -c "
-  export HOME=$CLAUDE_HOME
-  export PATH=$CLAUDE_HOME/.local/bin:$CLAUDE_HOME/.bun/bin:\$PATH
-  export CLAUDE_CODE_OAUTH_TOKEN='$CLAUDE_CODE_OAUTH_TOKEN'
-  claude plugin install superpowers@claude-plugins-official 2>/dev/null
-" || echo "WARNING: Failed to install superpowers plugin"
+sudo -u claude \
+  HOME="$CLAUDE_HOME" \
+  PATH="$CLAUDE_HOME/.local/bin:$CLAUDE_HOME/.bun/bin:$PATH" \
+  CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
+  claude plugin install superpowers@claude-plugins-official 2>/dev/null \
+  || echo "WARNING: Failed to install superpowers plugin"
 
 # Start Claude Code in tmux as the claude user
-su -s /bin/bash claude -c "
-  export GH_CONFIG_DIR=/opt/gh-config
-  export HOME=$CLAUDE_HOME
-  export PATH=$CLAUDE_HOME/.local/bin:$CLAUDE_HOME/.bun/bin:\$PATH
-  export CLAUDE_CODE_OAUTH_TOKEN='$CLAUDE_CODE_OAUTH_TOKEN'
-  export TERM=xterm-256color
-  export COLORTERM=truecolor
-  cd '$WORK_DIR'
-  tmux -f /tmp/.tmux.conf new-session -d -s claude 'claude --dangerously-skip-permissions'
-"
+sudo -u claude \
+  HOME="$CLAUDE_HOME" \
+  PATH="$CLAUDE_HOME/.local/bin:$CLAUDE_HOME/.bun/bin:$PATH" \
+  GH_CONFIG_DIR="/opt/gh-config" \
+  CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
+  TERM="xterm-256color" \
+  COLORTERM="truecolor" \
+  tmux -f /tmp/.tmux.conf new-session -d -s claude \
+    -c "$WORK_DIR" \
+    "claude --dangerously-skip-permissions"
 
 # Attach
 exec tmux -S "$TMUX_SOCKET" attach -t claude

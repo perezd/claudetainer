@@ -111,7 +111,9 @@ echo "[ENTRYPOINT] Root filesystem locked (read-only)"
 # === 7. Clone repo (optional) ===
 if [[ -n "${REPO_URL:-}" ]]; then
   echo "[ENTRYPOINT] Cloning $REPO_URL..."
-  su -s /bin/bash claude -c "git clone '$REPO_URL' /workspace/repo" || \
+  # Clone as root (has access to git credentials), then give full ownership to claude
+  git clone "$REPO_URL" /workspace/repo && \
+    chown -R claude:claude /workspace/repo || \
     echo "[ENTRYPOINT] WARNING: Failed to clone $REPO_URL" >&2
 fi
 
