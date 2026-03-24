@@ -12,8 +12,13 @@ chmod 1777 /tmp
 
 # Set ownership and create subdirectories
 chown claude:claude /workspace /home/claude
-mkdir -p /home/claude/.cache /home/claude/.claude /home/claude/.local
-chown claude:claude /home/claude/.cache /home/claude/.claude /home/claude/.local
+mkdir -p /home/claude/.cache /home/claude/.claude /home/claude/.local/bin /home/claude/.bun/bin
+chown -R claude:claude /home/claude/.cache /home/claude/.claude /home/claude/.local /home/claude/.bun
+
+# Recreate expected binary paths (originals wiped by tmpfs mount)
+ln -sf /usr/local/bin/claude /home/claude/.local/bin/claude
+ln -sf /usr/local/bin/bun /home/claude/.bun/bin/bun
+ln -sf /usr/local/bin/bunx /home/claude/.bun/bin/bunx
 
 # === 2. Network lockdown ===
 
