@@ -140,10 +140,10 @@ chmod 1777 /run/claude-approved
 cp /opt/claude/settings.json /home/claude/.claude/settings.json
 chown claude:claude /home/claude/.claude/settings.json
 
-# Seed pre-installed plugins (built into image, avoids runtime cloning)
-if [ -d /opt/claude-plugins ] && [ "$(ls -A /opt/claude-plugins 2>/dev/null)" ]; then
-  mkdir -p /home/claude/.claude/plugins
-  cp -r /opt/claude-plugins/* /home/claude/.claude/plugins/
+# Seed superpowers plugin cache (cloned at build time, avoids runtime download)
+if [ -d /opt/claude-plugins/superpowers ]; then
+  mkdir -p /home/claude/.claude/plugins/cache/claude-plugins-official
+  cp -r /opt/claude-plugins/superpowers /home/claude/.claude/plugins/cache/claude-plugins-official/
   chown -R claude:claude /home/claude/.claude/plugins
 fi
 
@@ -181,7 +181,64 @@ cat > /home/claude/.claude.json <<EOF
 EOF
 chown claude:claude /home/claude/.claude.json
 
-echo "[ENTRYPOINT] Ready. Waiting for SSH connections..."
+# === 8. Install plugins (runtime, needs network) ===
+echo "[ENTRYPOINT] Installing plugins..."
+sudo -u claude \
+  HOME=/home/claude \
+  PATH="/home/claude/.local/bin:/home/claude/.bun/bin:/usr/local/bin:/usr/bin:/bin" \
+  GH_CONFIG_DIR="/opt/gh-config" \
+  CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
+  LANG="${LANG:-en_US.UTF-8}" \
+  LC_ALL="${LC_ALL:-en_US.UTF-8}" \
+  claude plugin install superpowers@claude-plugins-official 2>&1 \
+  || echo "[ENTRYPOINT] WARNING: Plugin install failed" >&2
+
+# === 9. Readiness verification ===
+READY=true
+
+# CoreDNS must be running
+if ! pidof coredns >/dev/null 2>&1; then
+  echo "[ENTRYPOINT] WARN: CoreDNS is not running" >&2
+  READY=false
+fi
+
+# iptables must have rules loaded (more than just the base header)
+RULE_COUNT=$(iptables -L OUTPUT -n 2>/dev/null | grep -c ACCEPT || echo 0)
+if [[ "$RULE_COUNT" -lt 5 ]]; then
+  echo "[ENTRYPOINT] WARN: iptables has only $RULE_COUNT ACCEPT rules" >&2
+  READY=false
+fi
+
+# Settings must be seeded with plugin config
+if [[ ! -f /home/claude/.claude/settings.json ]]; then
+  echo "[ENTRYPOINT] WARN: settings.json not found" >&2
+  READY=false
+elif ! grep -q superpowers /home/claude/.claude/settings.json 2>/dev/null; then
+  echo "[ENTRYPOINT] WARN: superpowers not in settings.json" >&2
+  READY=false
+fi
+
+# Plugin files must be seeded
+if [[ ! -d /home/claude/.claude/plugins/cache/claude-plugins-official/superpowers ]]; then
+  echo "[ENTRYPOINT] WARN: superpowers plugin files not found" >&2
+  READY=false
+fi
+
+# Repo must be cloned (if REPO_URL was set)
+if [[ -n "${REPO_URL:-}" ]] && [[ ! -d /workspace/repo/.git ]]; then
+  echo "[ENTRYPOINT] WARN: repo clone missing at /workspace/repo" >&2
+  READY=false
+fi
+
+if [[ "$READY" == "true" ]]; then
+  touch /tmp/claudetainer-ready
+  echo "[ENTRYPOINT] Ready. All checks passed."
+else
+  echo "[ENTRYPOINT] WARN: Some checks failed, starting anyway."
+  touch /tmp/claudetainer-ready
+fi
+
+echo "[ENTRYPOINT] Waiting for SSH connections..."
 echo "[ENTRYPOINT] Run 'fly ssh console -a <app>' to connect."
 
 # Keep the container alive — bash stays as PID 1 to reap zombie children

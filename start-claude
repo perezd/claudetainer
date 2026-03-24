@@ -43,15 +43,34 @@ set -ga terminal-overrides ",*:Smulx=\E[4::%p1%dm"
 set -ga terminal-overrides ",*:Setulc=\E[58::2::%p1%{65536}%/%d::%p1%{256}%/%{255}%&%d::%p1%{255}%&%d%;m"
 TMUX
 
-# Determine working directory
+# Wait for entrypoint to finish setup (repo clone, plugins, network)
+echo "Waiting for claudetainer to be ready..."
+for i in $(seq 1 60); do
+  [[ -f /tmp/claudetainer-ready ]] && break
+  sleep 1
+done
+
+if [[ ! -f /tmp/claudetainer-ready ]]; then
+  echo "WARNING: Timed out waiting for readiness (60s). Starting anyway."
+fi
+
+# Determine working directory (after readiness — repo may have just been cloned)
 WORK_DIR="/workspace"
 if [[ -d /workspace/repo ]]; then
   WORK_DIR="/workspace/repo"
 fi
 
 
-echo "initializing claudetainer ..."
-
+# Warmup: run claude once to initialize caches, plugin loading, etc.
+echo "Warming up Claude Code..."
+sudo -u claude \
+  HOME="$CLAUDE_HOME" \
+  PATH="$CLAUDE_HOME/.local/bin:$CLAUDE_HOME/.bun/bin:$PATH" \
+  GH_CONFIG_DIR="/opt/gh-config" \
+  CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
+  LANG="$LANG" \
+  LC_ALL="$LC_ALL" \
+  claude -p "respond with OK" --max-turns 1 >/dev/null 2>&1 || true
 
 # Start Claude Code in tmux as the claude user
 sudo -u claude \
