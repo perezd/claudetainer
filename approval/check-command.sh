@@ -78,7 +78,24 @@ evaluate_command() {
 split_and_evaluate() {
   local full_cmd="$1"
 
-  # Check for $() and backtick subshells — extract and evaluate inner commands
+  # If the command contains a heredoc, evaluate only the base command
+  # Heredoc bodies contain arbitrary text that must not be parsed as commands
+  if echo "$full_cmd" | grep -qE '<<-?\s*['\''"]?[A-Za-z_]+['\''"]?'; then
+    # Extract everything before the heredoc marker
+    local base_cmd
+    base_cmd=$(echo "$full_cmd" | sed 's/<<-*\s*['\''\"]\{0,1\}[A-Za-z_]*['\''\"]\{0,1\}.*//')
+    # Split the base on && ; || and evaluate each part
+    local subcmds
+    subcmds=$(echo "$base_cmd" | sed 's/\s*&&\s*/\x00/g; s/\s*||\s*/\x00/g; s/\s*;\s*/\x00/g')
+    while IFS= read -r -d $'\0' subcmd || [[ -n "$subcmd" ]]; do
+      subcmd=$(echo "$subcmd" | sed 's/^[[:space:]]*//')
+      [[ -z "$subcmd" ]] && continue
+      evaluate_command "$subcmd" || return $?
+    done <<< "$subcmds"
+    return 0
+  fi
+
+  # Check for $() subshells — extract and evaluate inner commands
   local inner
   inner=$(echo "$full_cmd" | grep -oP '\$\(\K[^)]+' || true)
   if [[ -n "$inner" ]]; then
@@ -98,7 +115,6 @@ split_and_evaluate() {
   subcmds=$(echo "$full_cmd" | sed 's/\s*&&\s*/\x00/g; s/\s*||\s*/\x00/g; s/\s*;\s*/\x00/g')
 
   while IFS= read -r -d $'\0' subcmd || [[ -n "$subcmd" ]]; do
-    # Strip any remaining $() or backtick wrappers from the subcmd itself
     subcmd=$(echo "$subcmd" | sed 's/\$([^)]*)//g; s/`[^`]*`//g; s/^[[:space:]]*//')
     [[ -z "$subcmd" ]] && continue
     evaluate_command "$subcmd" || return $?
