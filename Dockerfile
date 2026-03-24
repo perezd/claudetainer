@@ -3,7 +3,29 @@ FROM debian:bookworm-slim
 # System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash ca-certificates curl dnsutils fd-find git iptables sudo \
-    jq less python3 ripgrep tmux tree unzip wget xxd \
+    jq less locales python3 ripgrep tree unzip wget xxd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Generate UTF-8 locale (bookworm-slim strips locale data; needed for TUI rendering)
+RUN sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen && locale-gen
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# tmux 3.6+ (synchronized output support for Claude Code TUI)
+# bookworm ships 3.3a which causes rendering flicker
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libevent-dev libncurses-dev bison pkg-config make gcc \
+    && TMUX_VERSION=3.6a \
+    && curl -fsSL "https://github.com/tmux/tmux/releases/download/${TMUX_VERSION}/tmux-${TMUX_VERSION}.tar.gz" \
+    | tar -xz \
+    && cd "tmux-${TMUX_VERSION}" \
+    && ./configure --prefix=/usr/local \
+    && make -j"$(nproc)" \
+    && make install \
+    && cd / && rm -rf "tmux-${TMUX_VERSION}" \
+    && apt-get purge -y libevent-dev libncurses-dev bison pkg-config make gcc \
+    && apt-get autoremove -y \
+    && apt-get install -y --no-install-recommends libevent-core-2.1-7 libncurses6 \
     && rm -rf /var/lib/apt/lists/*
 
 # just (not in Debian repos — install from official prebuilt binary)
