@@ -18,5 +18,9 @@
   "skipDangerousModePermissionPrompt": true,
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash /opt/claude/statusline-command.sh"
   }
 }
