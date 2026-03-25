@@ -85,32 +85,15 @@ git commit -m "feat: pre-clone TypeScript LSP plugin at build time"
 
 Insert after line 22 (`allow:^tmux\s+(list-sessions|list-windows|display-message)\b`), at the end of the auto-approve section:
 
-```
-allow:^node\b
-allow:^npm\s+(ls|list|view|info|explain|query)\b
-```
+**Note:** `approval/rules.conf` now uses `block:`/`block-pattern:`/`hot:` rules with a default-allow posture (evaluated by the TypeScript classifier, not the old shell script). No explicit `allow` rules are needed — `node` and `npm` commands pass through unless they match a block rule or contain a hot word. `npm install`, `npm ci`, `npm exec`, and `npx` are already listed as hot words and will be escalated to Haiku classification.
 
-- [ ] **Step 2: Add npm and npx approval-required rules**
+Verify that no existing `block:` or `block-pattern:` rule unintentionally blocks `node` or `npm` for legitimate LSP usage. Piping to `node` is correctly hard-blocked by `block-pattern:.*\|\s*/?(usr/)?(s?bin/)?(python3?|node|bun|perl|ruby)\b`.
 
-Insert after line 70 (`approve:^wget\b`), at the end of the approval-required section:
-
-```
-approve:^npm\s+(install|ci|exec|run)\b
-approve:^npx\b
-```
-
-- [ ] **Step 3: Verify rule safety**
-
-Confirm the new rules are safe alongside the existing pipe-to-node block rule (line 27: `block:.*\|\s*/?(usr/)?(s?bin/)?(python3?|node|bun|perl|ruby)\b`). `check-command.sh` processes rules in file order (top-to-bottom, first match wins). Since allow rules appear before block rules in the file, safety depends on the regex patterns NOT overlapping:
-- `allow:^node\b` matches commands that START with `node` (e.g., `node server.js`)
-- `block:.*\|\s*...node\b` matches commands containing a PIPE to node (e.g., `curl foo | node`)
-- A piped command like `curl foo | node` does NOT match `^node\b` (it starts with `curl`), so it falls through to the block rule. Safe.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 2: Commit (if any rules.conf changes were needed)**
 
 ```bash
 git add approval/rules.conf
-git commit -m "feat: add approval rules for node, npm, and npx"
+git commit -m "feat: verify approval rules for node and npm"
 ```
 
 ---

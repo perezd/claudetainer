@@ -143,13 +143,11 @@ If settings.json is missing entirely, the first branch fires and the individual 
 | `Dockerfile` | Add Node.js 22.x install; clone monorepo and extract `typescript-lsp` with build guard |
 | `entrypoint.sh` | Seed plugin cache; add plugin install (with sudo wrapper); add readiness checks |
 | `claude-settings.json` | Add `typescript-lsp@claude-plugins-official` to `enabledPlugins` |
-| `approval/rules.conf` | Add `allow` rules for `node`, `npm`, and `npx` |
+| `approval/rules.conf` | Verify `node`/`npm` are not blocked under the `block:`/`block-pattern:`/`hot:` rule model (default-allow posture) |
 
 ## Files NOT Changed
 
 - `network/domains.conf` — existing allowlist covers all needed domains (`registry.npmjs.org` already present for npm fetches)
-- `start-claude` — no changes to SSH login flow
-- `network/refresh-iptables.sh` — no network changes
 
 ## Dependencies
 
@@ -159,7 +157,7 @@ If settings.json is missing entirely, the first branch fires and the individual 
 
 ## Security Considerations
 
-- **Node.js adds `node`, `npm`, `npx`, `corepack` to the image.** Direct `node` invocation is auto-allowed (needed for LSP). `npm` read-only subcommands are auto-allowed; `npm install/ci/exec/run` and `npx` require approval (matching the `bun`/`bunx` pattern). `corepack` hits `default:block` intentionally. Piping to `node` remains hard-blocked by the existing rule.
+- **Node.js adds `node`, `npm`, `npx`, `corepack` to the image.** Under the default-allow posture, `node` and `npm` pass through unless they contain hot words. `npm install`, `npm ci`, `npm exec`, and `npx` are hot words that escalate to Haiku classification. Piping to `node` remains hard-blocked by the existing `block-pattern` rule.
 - **Plugin install may fetch from npm registry at runtime.** `registry.npmjs.org` is already in the domain allowlist.
 - **`deb.nodesource.com` is build-time only** and not accessible at runtime (not in `domains.conf`).
 
