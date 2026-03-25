@@ -198,7 +198,17 @@ sudo -u claude \
   LANG="${LANG:-en_US.UTF-8}" \
   LC_ALL="${LC_ALL:-en_US.UTF-8}" \
   claude plugin install superpowers@claude-plugins-official 2>&1 \
-  || echo "[ENTRYPOINT] WARNING: Plugin install failed" >&2
+  || echo "[ENTRYPOINT] WARNING: Plugin install failed (superpowers)" >&2
+
+sudo -u claude \
+  HOME=/home/claude \
+  PATH="/home/claude/.local/bin:/home/claude/.bun/bin:/usr/local/bin:/usr/bin:/bin" \
+  GH_CONFIG_DIR="/opt/gh-config" \
+  CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
+  LANG="${LANG:-en_US.UTF-8}" \
+  LC_ALL="${LC_ALL:-en_US.UTF-8}" \
+  claude plugin install typescript-lsp@claude-plugins-official 2>&1 \
+  || echo "[ENTRYPOINT] WARNING: Plugin install failed (typescript-lsp)" >&2
 
 # === 9. Readiness verification ===
 READY=true
