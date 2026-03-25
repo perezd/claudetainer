@@ -60,7 +60,8 @@ RUN cp -L /home/claude/.bun/bin/bun /usr/local/bin/bun \
 # Node.js LTS (required by TypeScript LSP plugin)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g typescript typescript-language-server
 
 # Claude Code (install as claude user)
 USER claude
