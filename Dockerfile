@@ -84,7 +84,7 @@ RUN git clone --depth 1 https://github.com/anthropics/claude-plugins-official.gi
     && rm -rf /tmp/claude-plugins-official
 
 # Start-claude script: handles auth, tmux creation, and attach
-COPY start-claude /usr/local/bin/start-claude
+COPY scripts/start-claude /usr/local/bin/start-claude
 RUN chmod +x /usr/local/bin/start-claude
 
 # Run start-claude on SSH login (handles auth + tmux attach/create)
@@ -99,7 +99,7 @@ RUN cd /opt/approval \
     && chmod +x check-command check-command.sh
 
 # gh wrapper (ensures GH_CONFIG_DIR is always set for Claude Code subprocesses)
-COPY gh-wrapper.sh /usr/local/bin/gh
+COPY scripts/gh-wrapper.sh /usr/local/bin/gh
 RUN chmod +x /usr/local/bin/gh
 
 # Network config
@@ -108,16 +108,16 @@ RUN chmod +x /opt/network/refresh-iptables.sh
 
 # Claude settings template, statusline, and session namer
 COPY claude-settings.json /opt/claude/settings.json
-COPY statusline-command.sh /opt/claude/statusline-command.sh
-COPY session-namer.sh /opt/claude/session-namer.sh
+COPY scripts/statusline-command.sh /opt/claude/statusline-command.sh
+COPY scripts/session-namer.sh /opt/claude/session-namer.sh
 RUN chmod +x /opt/claude/statusline-command.sh /opt/claude/session-namer.sh
 
 # Status tool
-COPY status /usr/local/bin/status
+COPY scripts/status /usr/local/bin/status
 RUN chmod +x /usr/local/bin/status
 
 # Entrypoint
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Writable mount targets
