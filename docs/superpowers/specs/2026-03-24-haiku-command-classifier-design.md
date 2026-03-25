@@ -103,7 +103,13 @@ block-pattern:^rm\s+-rf\s+/
 block-pattern:^chmod\s+777\b
 block-pattern:.*/proc/
 
-# Hot words: presence anywhere triggers Haiku review (substring match)
+# Credential leak prevention: block direct references to secret env vars.
+# Catches echo $GH_PAT, printf "$CLAUDE_CODE_OAUTH_TOKEN", ${ANTHROPIC_API_KEY}, etc.
+block-pattern:\$\{?(CLAUDE_CODE_OAUTH_TOKEN|GH_PAT|ANTHROPIC_API_KEY)\b
+
+# Hot words: presence anywhere triggers Haiku review (substring match).
+# Includes credential variable names so any indirect reference is escalated to Haiku
+# even if not a direct shell expansion (e.g., in python strings, heredocs, etc.)
 hot:curl
 hot:wget
 hot:bun add
@@ -117,6 +123,9 @@ hot:apt install
 hot:pip install
 hot:pip3 install
 hot:pipx
+hot:CLAUDE_CODE_OAUTH_TOKEN
+hot:GH_PAT
+hot:ANTHROPIC_API_KEY
 ```
 
 Scan logic (all in TypeScript):
@@ -131,7 +140,7 @@ All `block:` and `block-pattern:` rules are processed together in Tier 1 before 
 Invoked directly via `@anthropic-ai/sdk` using the `ANTHROPIC_API_KEY` environment variable (derived from `CLAUDE_CODE_OAUTH_TOKEN` at container startup). This avoids the overhead of spawning a `claude -p` subprocess and gives us structured JSON parsing without shell fragility.
 
 ```typescript
-const client = new Anthropic({ timeout: 15_000 }); // fail before 30s hook timeout
+const client = new Anthropic({ timeout: 10_000 }); // 10s per attempt, 2 attempts max = 20s < 30s hook timeout
 const response = await client.messages.create({
   model: "claude-haiku-4-5-20251001",
   max_tokens: 256,
@@ -161,10 +170,12 @@ type Verdict =
   | { verdict: "approve"; reason: string };
 ```
 
-**Response parsing with retry:** The SDK returns structured `ContentBlock[]`. Extract the text content, then `JSON.parse()` it. If parsing fails (malformed JSON, unexpected structure, or stdout corruption from SDK internals), retry the Haiku call up to 3 times. If all retries fail, fail closed with a deny decision. This handles the edge case where the Anthropic SDK or Bun runtime writes unexpected output to stdout — the retry ensures transient issues don't block all Tier 3 commands.
+**Response parsing with retry:** The SDK returns structured `ContentBlock[]`. Extract the text content, then `JSON.parse()` it. If parsing fails (malformed JSON, unexpected structure, or stdout corruption from SDK internals), retry the Haiku call once (2 attempts total). If both fail, fail closed with a deny decision.
+
+**Timeout arithmetic:** SDK timeout is 10s per attempt. With 2 attempts max, worst case is 20s — well within the 30s hook timeout, leaving 10s headroom for Bun startup and rule parsing.
 
 ```typescript
-async function classifyWithHaiku(command: string, maxRetries = 3): Promise<Verdict> {
+async function classifyWithHaiku(command: string, maxRetries = 2): Promise<Verdict> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const response = await client.messages.create({ ... });
@@ -353,9 +364,9 @@ Preserve the `[HOOK]` stderr logging pattern from the current implementation. Lo
 ### Performance
 
 - Tier 1 + 2: sub-100ms (`RegExp.test()` and `String.includes()` against short rule lists)
-- Tier 3: 1-3s (Haiku API call via Anthropic SDK, 15s client timeout)
+- Tier 3: 1-3s (Haiku API call via Anthropic SDK, 10s client timeout, 2 attempts max = 20s worst case)
 - Most commands (git, ls, bun run, etc.) never reach Tier 3
-- Hook timeout: 30s (configured in claude-settings.json), SDK timeout 15s ensures graceful fail-closed before hook is killed
+- Hook timeout: 30s (configured in claude-settings.json), 20s worst case for Tier 3 leaves 10s headroom
 
 ## Security Considerations
 
