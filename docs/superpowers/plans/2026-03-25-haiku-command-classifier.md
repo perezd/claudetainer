@@ -33,7 +33,7 @@ approval/
 approval/approve          # DELETE: no longer needed
 
 Dockerfile                # MODIFY: add bun install step, remove approve script
-entrypoint.sh             # MODIFY: export ANTHROPIC_API_KEY, remove /run/claude-approved
+entrypoint.sh             # MODIFY: export ANTHROPIC_AUTH_TOKEN, remove /run/claude-approved
 .gitignore                # MODIFY: add approval/node_modules/
 ```
 
@@ -296,7 +296,7 @@ block-pattern:^git\s+tag\b
 block-pattern:^git\s+push\s+.*--tags
 
 # Credential leak prevention: block direct references to secret env vars
-block-pattern:\$\{?(CLAUDE_CODE_OAUTH_TOKEN|GH_PAT|ANTHROPIC_API_KEY)\b
+block-pattern:\$\{?(CLAUDE_CODE_OAUTH_TOKEN|GH_PAT|ANTHROPIC_AUTH_TOKEN)\b
 
 # === Tier 2: Hot words ===
 # Presence anywhere in the command triggers Haiku classification.
@@ -326,7 +326,7 @@ hot:wget
 # Credential variable names (escalate any indirect reference)
 hot:CLAUDE_CODE_OAUTH_TOKEN
 hot:GH_PAT
-hot:ANTHROPIC_API_KEY
+hot:ANTHROPIC_AUTH_TOKEN
 ```
 
 - [ ] **Step 2: Commit**
@@ -652,7 +652,7 @@ describe("Tier 1: hard-block", () => {
     // Credential variable direct references
     "echo $GH_PAT",
     'printf "$CLAUDE_CODE_OAUTH_TOKEN"',
-    'echo ${ANTHROPIC_API_KEY}',
+    'echo ${ANTHROPIC_AUTH_TOKEN}',
   ];
 
   for (const cmd of blocked) {
@@ -699,7 +699,7 @@ describe("Tier 2: hot-word scan", () => {
     "npx create-react-app",
     // Credential variable names as plain strings (no $ prefix) — triggers hot word
     'python3 -c "print(GH_PAT)"',
-    "echo 'check ANTHROPIC_API_KEY'",
+    "echo 'check ANTHROPIC_AUTH_TOKEN'",
   ];
 
   for (const cmd of escalated) {
@@ -925,13 +925,13 @@ git commit -m "feat(approval): update Dockerfile for TypeScript hook with bun in
 **Files:**
 - Modify: `entrypoint.sh`
 
-- [ ] **Step 1: Export ANTHROPIC_API_KEY**
+- [ ] **Step 1: Export ANTHROPIC_AUTH_TOKEN**
 
 Add after line 14 (after the secrets validation block), before filesystem hardening:
 
 ```bash
-# Derive ANTHROPIC_API_KEY for the approval hook's Anthropic SDK usage
-export ANTHROPIC_API_KEY="$CLAUDE_CODE_OAUTH_TOKEN"
+# Derive ANTHROPIC_AUTH_TOKEN for the approval hook's Anthropic SDK usage
+export ANTHROPIC_AUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN"
 ```
 
 - [ ] **Step 2: Remove /run/claude-approved setup**
@@ -949,7 +949,7 @@ chmod 1777 /run/claude-approved
 
 ```bash
 git add entrypoint.sh
-git commit -m "feat(approval): export ANTHROPIC_API_KEY, remove token directory setup"
+git commit -m "feat(approval): export ANTHROPIC_AUTH_TOKEN, remove token directory setup"
 ```
 
 ---
@@ -1000,7 +1000,7 @@ Expected stdout for the "sudo rm -rf /" test:
 echo '{"tool_name":"Bash","tool_input":{"command":"(cd /workspace/repo/hadron/packages/cli && bun add --exact lodash && bun add --exact --dev @types/lodash"}}' | RULES_FILE=./rules.conf bun run check-command.ts
 ```
 
-Expected: Tier 2 detects "bun add", escalates to Haiku. If `ANTHROPIC_API_KEY` is set, Haiku returns `approve` and the hook outputs `"permissionDecision":"ask"`. If no API key, the hook fails closed with `"permissionDecision":"deny"`.
+Expected: Tier 2 detects "bun add", escalates to Haiku. If `ANTHROPIC_AUTH_TOKEN` is set, Haiku returns `approve` and the hook outputs `"permissionDecision":"ask"`. If no API key, the hook fails closed with `"permissionDecision":"deny"`.
 
 - [ ] **Step 4: Final commit**
 

@@ -249,7 +249,7 @@ The machine is configured with `--restart no` and `--autostart=false`, so it sta
   - `/workspace` (512MB) — working directory for code
   - `/home/claude` (256MB) — Claude's home directory
   - `/tmp` (128MB) — temporary files
-- **Immutable settings**: Claude Code's `settings.json` (which configures the approval hook) is root-owned and mode 644. Claude can read it but cannot modify the hook configuration. Claude _can_ delete and recreate it (accepted risk — iptables is the real enforcement layer).
+- **Settings file**: Claude Code's `settings.json` (which configures the approval hook) is owned by the `claude` user. Claude can delete and recreate it, which would remove the hook. This is an accepted risk — iptables is the real enforcement layer, and the hook provides defense-in-depth.
 
 ### Layer 2: Network Isolation
 
@@ -259,7 +259,7 @@ The machine is configured with `--restart no` and `--autostart=false`, so it sta
 - **IPv4 only**: AAAA queries return empty (NOERROR) to force IPv4, where iptables rules apply
 - **Metadata blocked**: Cloud instance metadata (169.254.0.0/16) and Fly private networking (172.16.0.0/12) are explicitly dropped
 - **UDP dropped**: All outbound UDP except DNS is dropped (prevents QUIC bypass of TCP-level controls)
-- **30-minute refresh**: iptables rules are refreshed every 30 minutes to pick up IP changes
+- **5-minute refresh**: iptables rules are refreshed every 5 minutes to pick up IP changes
 - **IPv6 unrestricted**: Fly SSH requires public IPv6 routing, and Fly's kernel has broken IPv6 conntrack, so IPv6 output is left at ACCEPT. IPv4 iptables is the enforcement layer.
 
 ### Layer 3: Command Classification
@@ -268,7 +268,7 @@ The machine is configured with `--restart no` and `--autostart=false`, so it sta
 - **Three-tier pipeline**: Hard-block (regex) → hot-word scan (substring) → Haiku LLM classification (Anthropic SDK)
 - **Default-allow posture**: Commands without hot words are allowed (network layer is primary enforcement)
 - **Native approval UX**: Haiku's "approve" verdict triggers Claude Code's built-in permission prompt — no custom token system
-- **Credential leak prevention**: Direct references to `$GH_PAT`, `$CLAUDE_CODE_OAUTH_TOKEN`, `$ANTHROPIC_API_KEY` are hard-blocked; indirect references (variable names as strings) are escalated to Haiku
+- **Credential leak prevention**: Direct references to `$GH_PAT`, `$CLAUDE_CODE_OAUTH_TOKEN`, `$ANTHROPIC_AUTH_TOKEN` are hard-blocked; indirect references (variable names as strings) are escalated to Haiku
 
 ## Customization
 

@@ -7,9 +7,11 @@ CLAUDE_HOME="/home/claude"
 export LANG="${LANG:-en_US.UTF-8}"
 export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 
-# If tmux session already exists, just attach
-if tmux -S "$TMUX_SOCKET" has-session -t claude 2>/dev/null; then
-  exec tmux -S "$TMUX_SOCKET" attach -t claude
+# If any tmux session already exists, reattach to it (session may have been renamed)
+EXISTING_SESSION=$(tmux -S "$TMUX_SOCKET" list-sessions -F '#{session_name}' 2>/dev/null | head -1)
+if [[ -n "$EXISTING_SESSION" ]]; then
+  tmux -S "$TMUX_SOCKET" select-pane -t "$EXISTING_SESSION.0" 2>/dev/null || true
+  exec tmux -S "$TMUX_SOCKET" attach -t "$EXISTING_SESSION"
 fi
 
 # Check that the OAuth token is available

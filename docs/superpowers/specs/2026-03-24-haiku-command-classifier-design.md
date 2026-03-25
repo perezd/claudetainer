@@ -104,8 +104,8 @@ block-pattern:^chmod\s+777\b
 block-pattern:.*/proc/
 
 # Credential leak prevention: block direct references to secret env vars.
-# Catches echo $GH_PAT, printf "$CLAUDE_CODE_OAUTH_TOKEN", ${ANTHROPIC_API_KEY}, etc.
-block-pattern:\$\{?(CLAUDE_CODE_OAUTH_TOKEN|GH_PAT|ANTHROPIC_API_KEY)\b
+# Catches echo $GH_PAT, printf "$CLAUDE_CODE_OAUTH_TOKEN", ${ANTHROPIC_AUTH_TOKEN}, etc.
+block-pattern:\$\{?(CLAUDE_CODE_OAUTH_TOKEN|GH_PAT|ANTHROPIC_AUTH_TOKEN)\b
 
 # Hot words: presence anywhere triggers Haiku review (substring match).
 # Includes credential variable names so any indirect reference is escalated to Haiku
@@ -125,7 +125,7 @@ hot:pip3 install
 hot:pipx
 hot:CLAUDE_CODE_OAUTH_TOKEN
 hot:GH_PAT
-hot:ANTHROPIC_API_KEY
+hot:ANTHROPIC_AUTH_TOKEN
 ```
 
 Scan logic (all in TypeScript):
@@ -137,7 +137,7 @@ All `block:` and `block-pattern:` rules are processed together in Tier 1 before 
 
 ### Haiku Classification
 
-Invoked directly via `@anthropic-ai/sdk` using the `ANTHROPIC_API_KEY` environment variable (derived from `CLAUDE_CODE_OAUTH_TOKEN` at container startup). This avoids the overhead of spawning a `claude -p` subprocess and gives us structured JSON parsing without shell fragility.
+Invoked directly via `@anthropic-ai/sdk` using the `ANTHROPIC_AUTH_TOKEN` environment variable (derived from `CLAUDE_CODE_OAUTH_TOKEN` at container startup). This avoids the overhead of spawning a `claude -p` subprocess and gives us structured JSON parsing without shell fragility.
 
 ```typescript
 const client = new Anthropic({ timeout: 10_000 }); // 10s per attempt, 2 attempts max = 20s < 30s hook timeout
@@ -148,9 +148,9 @@ const response = await client.messages.create({
 });
 ```
 
-The SDK reads `ANTHROPIC_API_KEY` from the environment. The entrypoint must export it:
+The SDK reads `ANTHROPIC_AUTH_TOKEN` from the environment (OAuth bearer token, not API key). The entrypoint must export it:
 ```bash
-export ANTHROPIC_API_KEY="$CLAUDE_CODE_OAUTH_TOKEN"
+export ANTHROPIC_AUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN"
 ```
 
 **Model retirement:** If Anthropic retires `claude-haiku-4-5-20251001`, the SDK returns an API error, which triggers fail-closed behavior — all Tier 3 commands are blocked until the model string is updated.
@@ -406,7 +406,7 @@ By using Claude Code's native `"ask"` permission decision, we eliminate the enti
 - `approval/tsconfig.json` — new: TypeScript config
 - `approval/prompt.ts` — new: Haiku system prompt as a template literal (separate file for readability)
 - `Dockerfile` — add `bun install --frozen-lockfile` step for approval/ dependencies
-- `entrypoint.sh` — export `ANTHROPIC_API_KEY` from `CLAUDE_CODE_OAUTH_TOKEN`
+- `entrypoint.sh` — export `ANTHROPIC_AUTH_TOKEN` from `CLAUDE_CODE_OAUTH_TOKEN`
 
 ## Files Removed
 
