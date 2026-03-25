@@ -13,7 +13,11 @@ input=$(cat)
 session_id=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null)
 [ -z "$session_id" ] && exit 0
 
-SENTINEL="/tmp/claude-session-named-${session_id}"
+# Sanitize session ID for filesystem path: allow only [A-Za-z0-9_-]
+sanitized_session_id=$(printf '%s' "$session_id" | sed 's/[^A-Za-z0-9_-]/_/g')
+[ -z "$sanitized_session_id" ] && exit 0
+
+SENTINEL="/tmp/claude-session-named-${sanitized_session_id}"
 [ -f "$SENTINEL" ] && exit 0
 touch "$SENTINEL"
 
@@ -29,7 +33,10 @@ touch "$SENTINEL"
     tr -d '\n' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]//g' | head -c 50)
 
   if [ -n "$name" ]; then
-    tmux rename-session -t claude "$name" 2>/dev/null || true
+    current_session=$(tmux display-message -p '#S' 2>/dev/null)
+    if [ -n "$current_session" ]; then
+      tmux rename-session -t "$current_session" "$name" 2>/dev/null || true
+    fi
   fi
 ) &
 

@@ -55,7 +55,7 @@ describe("Tier 1: hard-block", () => {
     // Credential variable direct references
     "echo $GH_PAT",
     'printf "$CLAUDE_CODE_OAUTH_TOKEN"',
-    'echo ${ANTHROPIC_API_KEY}',
+    'echo ${ANTHROPIC_AUTH_TOKEN}',
   ];
 
   for (const cmd of blocked) {
@@ -102,7 +102,7 @@ describe("Tier 2: hot-word scan", () => {
     "npx create-react-app",
     // Credential variable names as plain strings (no $ prefix) — triggers hot word
     'python3 -c "print(GH_PAT)"',
-    "echo 'check ANTHROPIC_API_KEY value'",
+    "echo 'check ANTHROPIC_AUTH_TOKEN value'",
   ];
 
   for (const cmd of escalated) {

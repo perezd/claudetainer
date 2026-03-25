@@ -13,8 +13,9 @@ if [[ ${#missing[@]} -gt 0 ]]; then
   exit 1
 fi
 
-# Derive ANTHROPIC_API_KEY for the approval hook's Anthropic SDK usage
-export ANTHROPIC_API_KEY="$CLAUDE_CODE_OAUTH_TOKEN"
+# Derive ANTHROPIC_AUTH_TOKEN for the approval hook's Anthropic SDK usage
+# (OAuth tokens use authToken/ANTHROPIC_AUTH_TOKEN, not apiKey/ANTHROPIC_API_KEY)
+export ANTHROPIC_AUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN"
 
 # === 1. Filesystem hardening ===
 # Mount tmpfs at writable paths before anything else
@@ -97,7 +98,7 @@ echo "nameserver 127.0.0.53" > /etc/resolv.conf
 # Apply iptables rules
 /opt/network/refresh-iptables.sh
 
-# Start periodic iptables refresh (every 30 min)
+# Start periodic iptables refresh (every 5 min)
 (while true; do sleep 300; /opt/network/refresh-iptables.sh; done) &
 
 # === 3. Git + GitHub configuration ===
