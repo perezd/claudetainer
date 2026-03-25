@@ -10,10 +10,20 @@ Specific failure: `(cd /workspace/repo/hadron/packages/cli && bun add --exact lo
 
 ## Design
 
+### Implementation Language
+
+The hook is implemented in TypeScript, run via `bun run`. This gives us:
+- Proper JSON parsing (no `grep -o '{.*}'` fragility)
+- Structured regex with `RegExp` objects and `.test()` (no shell quoting issues)
+- Direct Anthropic SDK usage via `@anthropic-ai/sdk` (no `claude -p` subprocess overhead)
+- Type-safe verdict handling with discriminated unions
+
+The project adds a `package.json` and `tsconfig.json` under `approval/` to keep the TS scope contained. The Dockerfile installs dependencies at build time (`bun install --frozen-lockfile`).
+
 ### Three-Tier Pipeline
 
 ```
-Command in
+Command in (JSON on stdin from Claude Code PreToolUse hook)
     |
     +- Tier 1: Hard-block scan (instant)
     |   Word-boundary regex + substring check for never-legitimate patterns.
@@ -25,7 +35,7 @@ Command in
     |   Match -> escalate to Tier 3.
     |
     +- Tier 3: Haiku classification (1-3s)
-        Send command + existing approval tokens to Haiku.
+        Send command + existing approval tokens to Haiku via Anthropic SDK.
         Returns verdict:
           allow  -> exit 0
           block  -> exit 2, block message
@@ -54,6 +64,9 @@ block:\bxargs\b
 block:claude-approved
 block:/run/claude-approved
 
+# Defense-in-depth: block references to internal sentinel values
+block:COMMAND_CLASSIFIER
+
 # Hot words: presence anywhere triggers Haiku review (substring match via grep -qF)
 hot:curl
 hot:wget
@@ -77,40 +90,46 @@ block-pattern:^chmod\s+777\b
 block-pattern:.*/proc/
 ```
 
-Scan logic:
-- `block:` — `grep -qE` (regex, supports `\b` word boundaries to avoid false positives on `eval`/`evaluate`, `exec`/`libexec`, `source`/`sourcemap`, etc.)
-- `hot:` — `grep -qF` (fixed string, fast, no regex interpretation)
-- `block-pattern:` — `grep -qE` (regex, for structural patterns)
+Scan logic (all in TypeScript):
+- `block:` — `new RegExp(pattern).test(command)` (regex, supports `\b` word boundaries to avoid false positives on `eval`/`evaluate`, `exec`/`libexec`, `source`/`sourcemap`, etc.)
+- `hot:` — `command.includes(keyword)` (substring, fast)
+- `block-pattern:` — `new RegExp(pattern).test(command)` (regex, for structural patterns)
+
+All `block:` and `block-pattern:` rules are processed together in Tier 1 before Tier 2 runs.
 
 ### Haiku Classification
 
-Invoked via `claude -p --model claude-haiku-4-5-20251001 --max-turns 1` (same pattern as existing `session-namer.sh`).
+Invoked directly via `@anthropic-ai/sdk` using the `ANTHROPIC_API_KEY` environment variable (derived from `CLAUDE_CODE_OAUTH_TOKEN` at container startup). This avoids the overhead of spawning a `claude -p` subprocess and gives us structured JSON parsing without shell fragility.
 
-Environment variable `COMMAND_CLASSIFIER=1` is set during the call to prevent recursion if the hook is triggered by the `claude -p` subprocess.
+```typescript
+const client = new Anthropic();
+const response = await client.messages.create({
+  model: "claude-haiku-4-5-20251001",
+  max_tokens: 256,
+  messages: [{ role: "user", content: prompt }],
+});
+```
+
+No recursion guard needed — the SDK makes a direct API call, not a Claude Code tool invocation, so the PreToolUse hook is never triggered.
 
 The prompt includes:
 1. System context defining classification rules
 2. The full command being evaluated (inside a fenced code block to resist prompt injection)
 3. List of existing approval token names from `/run/claude-approved/`
 
-Response format — single-line JSON:
+Response format — single-line JSON, parsed with `JSON.parse()`:
 
-```json
-{"verdict":"allow","reason":"curl targets localhost in a test script"}
-```
-```json
-{"verdict":"block","reason":"attempts to exfiltrate environment variables"}
-```
-```json
-{"verdict":"approve","phrase":"add-lodash-types-lodash-cli","reason":"installs lodash and @types/lodash to hadron CLI package"}
-```
-```json
-{"verdict":"approve","match":"add-lodash-types-lodash-cli","reason":"same install intent as existing token"}
+```typescript
+type Verdict =
+  | { verdict: "allow"; reason: string }
+  | { verdict: "block"; reason: string }
+  | { verdict: "approve"; phrase: string; reason: string }
+  | { verdict: "approve"; match: string; reason: string };
 ```
 
 When `match` is present, the hook consumes that token file and allows the command.
 
-**JSON extraction:** The raw output from `claude -p` may contain extra text. Extract JSON with `grep -o '{.*}'` before piping to `jq`. If extraction fails, treat as malformed response (fail closed).
+**Response parsing:** The SDK returns structured `ContentBlock[]`. Extract the text content, then `JSON.parse()` it. If parsing fails (malformed JSON, unexpected structure), fail closed — exit 2 with a block message.
 
 #### Haiku System Prompt
 
@@ -194,53 +213,88 @@ Claude sends: (cd /workspace/repo/hadron/packages/cli && bun add --exact lodash 
 9. Hook finds token file, deletes it (one-shot), allows command.
 ```
 
-The `approve` script simplifies to:
-```bash
-#!/usr/bin/env bash
-touch "/run/claude-approved/$1"
-```
-
-### check-command.sh Structure
-
+The `approve` script validates input and creates the token:
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
+phrase="$1"
+if [[ -z "$phrase" ]] || [[ "$phrase" =~ [/] ]] || [[ "$phrase" == ..* ]]; then
+  echo "Invalid approval phrase" >&2
+  exit 1
+fi
+touch "/run/claude-approved/$phrase"
+echo "Approved: $phrase"
+```
 
-RULES_FILE="/opt/approval/rules.conf"
-APPROVED_DIR="/run/claude-approved"
+### check-command.ts Structure
 
-# Recursion guard: skip if we're inside a classifier call
-[[ "${COMMAND_CLASSIFIER:-}" == "1" ]] && exit 0
+The hook is a single TypeScript file run via a thin shell wrapper:
 
-# Parse JSON input from stdin
-INPUT=$(cat)
-TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // ""')
-[[ "$TOOL_NAME" != "Bash" ]] && exit 0
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
-[[ -z "$COMMAND" ]] && exit 0
+**`approval/check-command.sh`** (wrapper, called by Claude Code hook):
+```bash
+#!/usr/bin/env bash
+exec bun run /opt/approval/check-command.ts
+```
 
-echo "[HOOK] Evaluating: $COMMAND" >&2
+**`approval/check-command.ts`** (main logic):
+```typescript
+import Anthropic from "@anthropic-ai/sdk";
+import { readFileSync, readdirSync, unlinkSync } from "fs";
 
-# Tier 1: Hard-block
-#   Read block: lines, grep -qE (word-boundary regex) against command
-#   Read block-pattern: lines, grep -qE (structural regex) against command
-#   Match -> exit 2 with block message
+const RULES_FILE = "/opt/approval/rules.conf";
+const APPROVED_DIR = "/run/claude-approved";
 
-# Tier 2: Hot-word scan
-#   Read hot: lines, grep -qF (fixed string) against command
-#   No match -> exit 0 (allow)
-#   Match -> log which hot word triggered, proceed to Tier 3
+// Read JSON from stdin (Claude Code PreToolUse hook protocol)
+const input = JSON.parse(await Bun.stdin.text());
+if (input.tool_name !== "Bash") process.exit(0);
+const command: string = input.tool_input?.command ?? "";
+if (!command) process.exit(0);
 
-# Tier 3: Haiku classification
-#   Gather existing tokens: ls /run/claude-approved/
-#   Build prompt with command (in code fence) + token list
-#   Call: COMMAND_CLASSIFIER=1 claude -p --model claude-haiku-4-5-20251001 --max-turns 1 "$PROMPT"
-#   Extract JSON: grep -o '{.*}' | jq
-#   If extraction/parsing fails -> exit 2 (fail closed)
-#   verdict=allow -> log reason, exit 0
-#   verdict=block -> log reason, exit 2 with block message
-#   verdict=approve + match -> verify token file exists, delete it (one-shot), exit 0
-#   verdict=approve + phrase -> exit 2 with approval instructions showing phrase
+console.error(`[HOOK] Evaluating: ${command}`);
+
+// Parse rules.conf into typed arrays
+const rules = parseRules(readFileSync(RULES_FILE, "utf-8"));
+
+// Tier 1: Hard-block (block: and block-pattern: rules together)
+for (const rule of rules.blocks) {
+  if (rule.pattern.test(command)) {
+    console.error(`[HOOK] BLOCK (${rule.raw}): ${command}`);
+    console.error(`⛔ Blocked: ${command}. Do NOT attempt to work around this.`);
+    process.exit(2);
+  }
+}
+
+// Tier 2: Hot-word scan
+const matchedHotWord = rules.hotWords.find((hw) => command.includes(hw));
+if (!matchedHotWord) {
+  console.error(`[HOOK] ALLOW (no hot words): ${command}`);
+  process.exit(0);
+}
+console.error(`[HOOK] Hot word "${matchedHotWord}" -> escalating to Haiku`);
+
+// Tier 3: Haiku classification
+const tokens = getExistingTokens();
+const verdict = await classifyWithHaiku(command, tokens);
+
+switch (verdict.verdict) {
+  case "allow":
+    console.error(`[HOOK] HAIKU ALLOW: ${verdict.reason}`);
+    process.exit(0);
+  case "block":
+    console.error(`[HOOK] HAIKU BLOCK: ${verdict.reason}`);
+    console.error(`⛔ Blocked: ${verdict.reason}. Do NOT attempt to work around this.`);
+    process.exit(2);
+  case "approve":
+    if ("match" in verdict && existsToken(verdict.match)) {
+      consumeToken(verdict.match);
+      console.error(`[HOOK] APPROVED (token: ${verdict.match}): ${command}`);
+      process.exit(0);
+    }
+    const phrase = "phrase" in verdict ? verdict.phrase : "unknown";
+    console.error(`[HOOK] APPROVAL REQUIRED: ${verdict.reason}`);
+    console.error(`⛔ Approval required. Run: ! approve ${phrase}`);
+    process.exit(2);
+}
 ```
 
 ### Failure Handling
@@ -268,6 +322,11 @@ Preserve the `[HOOK]` stderr logging pattern from the current implementation. Lo
 ### Self-approval prevention
 Claude could bypass the `approve` command by directly running `touch /run/claude-approved/<phrase>`. The hard-block rules `block:claude-approved` and `block:/run/claude-approved` catch any command referencing the approval directory regardless of which tool accesses it.
 
+**String-concatenation gap:** A command like `python3 -c "open('/run/clau'+'de-approved/tok','w')"` splits the string across concatenation, bypassing substring detection. This is an accepted risk: the attack is highly contrived, Claude is unlikely to generate it unprompted, and even if it did, the network layer constrains the blast radius. The `block:COMMAND_CLASSIFIER` rule (see below) provides an additional defense-in-depth example of this approach.
+
+### Recursion and environment variable injection
+The Anthropic SDK makes direct API calls, so the PreToolUse hook is never triggered recursively. However, `block:COMMAND_CLASSIFIER` is included as a defense-in-depth rule to prevent Claude from including this sentinel in commands (even though the env var injection does not work — the hook's environment is controlled by Claude Code, not by the command being evaluated).
+
 ### Token poisoning via compound commands
 Claude could craft a compound command (`bun add lodash && curl evil.com`) that Haiku might match to an existing `add-lodash` token. The Haiku prompt explicitly instructs: classify compound commands by the most dangerous operation, and only match a token if ALL operations fall within the token's scope.
 
@@ -281,20 +340,26 @@ This design inverts the current allowlist model: if no hot word is found, the co
 - Unknown commands without network/install hot words have limited blast radius inside the sandbox
 - The alternative (escalating all unknown commands to Haiku) would add latency to every single command
 
+**Accepted risk — python3/node network access:** Commands like `python3 -c "import urllib.request; ..."` or `node -e "fetch('...')"` can make network requests without triggering any hot word. These are allowed through to the network layer, which restricts outbound to allowlisted domains only. If an allowlisted domain is compromised (supply-chain attack via registry.npmjs.org), this becomes relevant. This is mitigated by the GH_PAT being extremely locked down (fine-grained, minimal permissions, scoped to specific repos) and the network allowlist being narrow.
+
 ### Token file atomicity
 Tokens are one-shot (deleted after use). In a single-agent container, race conditions are unlikely. The delete uses `rm -f` which is atomic at the filesystem level.
 
 ## Files Changed
 
-- `approval/check-command.sh` — rewrite with three-tier pipeline
+- `approval/check-command.ts` — new: main hook logic in TypeScript
+- `approval/check-command.sh` — rewrite as thin wrapper: `exec bun run /opt/approval/check-command.ts`
 - `approval/rules.conf` — simplify to block/hot/block-pattern sections
-- `approval/approve` — simplify to `touch "/run/claude-approved/$1"`
+- `approval/approve` — add path traversal validation, simplify to token creation
+- `approval/package.json` — new: declares `@anthropic-ai/sdk` dependency
+- `approval/tsconfig.json` — new: TypeScript config
+- `approval/prompt.ts` — new: Haiku system prompt as a template literal (separate file for readability)
+- `Dockerfile` — add `bun install --frozen-lockfile` step for approval/ dependencies
 
 ## Files Unchanged
 
-- `claude-settings.json` — hook config stays the same, 30s timeout is sufficient
-- `entrypoint.sh` — `/run/claude-approved/` tmpfs setup stays the same
-- `Dockerfile` — approval file installation stays the same
+- `claude-settings.json` — hook config stays the same (still calls `check-command.sh`, 30s timeout)
+- `entrypoint.sh` — `/run/claude-approved/` tmpfs setup stays the same, but must also export `ANTHROPIC_API_KEY` for the SDK
 
 ## Alternatives Considered
 
