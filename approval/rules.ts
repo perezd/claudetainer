@@ -20,7 +20,7 @@ export function parseRules(content: string): Rules {
     if (colonIdx === -1) continue;
 
     const type = trimmed.slice(0, colonIdx);
-    const value = trimmed.slice(colonIdx + 1);
+    const value = trimmed.slice(colonIdx + 1).trim();
 
     switch (type) {
       case "block":

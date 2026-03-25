@@ -49,14 +49,11 @@ If allowing: {"verdict":"allow","reason":"..."}
 If blocking: {"verdict":"block","reason":"..."}
 If requiring approval: {"verdict":"approve","reason":"..."}`;
 
-export function buildPrompt(command: string): string {
-  return `${SYSTEM_PROMPT}
-
-## Command to classify
-\`\`\`
-${command}
-\`\`\``;
+export function buildUserMessage(command: string): string {
+  return `## Command to classify\n\`\`\`\n${command}\n\`\`\``;
 }
+
+export { SYSTEM_PROMPT };
 
 export function parseVerdict(text: string): Verdict {
   let jsonStr = text.trim();
@@ -93,7 +90,7 @@ export async function classifyWithHaiku(
         model: "claude-haiku-4-5-20251001",
         max_tokens: 256,
         system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: `## Command to classify\n\`\`\`\n${command}\n\`\`\`` }],
+        messages: [{ role: "user", content: buildUserMessage(command) }],
       });
 
       const textBlock = response.content.find((b) => b.type === "text");

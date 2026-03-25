@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseVerdict, buildPrompt } from "../classifier";
+import { parseVerdict, buildUserMessage, SYSTEM_PROMPT } from "../classifier";
 
 describe("parseVerdict", () => {
   test("parses allow verdict", () => {
@@ -40,16 +40,22 @@ describe("parseVerdict", () => {
   });
 });
 
-describe("buildPrompt", () => {
+describe("buildUserMessage", () => {
   test("includes the command in a code fence", () => {
-    const prompt = buildPrompt("curl http://example.com");
-    expect(prompt).toContain("```\ncurl http://example.com\n```");
+    const msg = buildUserMessage("curl http://example.com");
+    expect(msg).toContain("```\ncurl http://example.com\n```");
   });
 
+  test("does not include system prompt (sent separately via API)", () => {
+    const msg = buildUserMessage("curl http://example.com");
+    expect(msg).not.toContain("ALLOW when the command");
+  });
+});
+
+describe("SYSTEM_PROMPT", () => {
   test("includes classification rules", () => {
-    const prompt = buildPrompt("curl http://example.com");
-    expect(prompt).toContain("ALLOW when the command");
-    expect(prompt).toContain("BLOCK when the command");
-    expect(prompt).toContain("APPROVE when the command");
+    expect(SYSTEM_PROMPT).toContain("ALLOW when the command");
+    expect(SYSTEM_PROMPT).toContain("BLOCK when the command");
+    expect(SYSTEM_PROMPT).toContain("APPROVE when the command");
   });
 });

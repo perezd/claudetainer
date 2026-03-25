@@ -19,7 +19,6 @@ sanitized_session_id=$(printf '%s' "$session_id" | sed 's/[^A-Za-z0-9_-]/_/g')
 
 SENTINEL="/tmp/claude-session-named-${sanitized_session_id}"
 [ -f "$SENTINEL" ] && exit 0
-touch "$SENTINEL"
 
 # Run in background so we don't block Claude Code
 (
@@ -37,6 +36,8 @@ touch "$SENTINEL"
     if [ -n "$current_session" ]; then
       tmux rename-session -t "$current_session" "$name" 2>/dev/null || true
     fi
+    # Only create sentinel after successful rename — allows retry on transient failures
+    touch "$SENTINEL"
   fi
 ) &
 
