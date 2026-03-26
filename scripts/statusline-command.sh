@@ -9,6 +9,8 @@ used=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
 
 if [ -n "$used" ]; then
   used_int=$(printf "%.0f" "$used")
+  [ "$used_int" -lt 0 ] && used_int=0
+  [ "$used_int" -gt 100 ] && used_int=100
   bar_filled=$(( used_int / 5 ))
   bar_empty=$(( 20 - bar_filled ))
   bar=""

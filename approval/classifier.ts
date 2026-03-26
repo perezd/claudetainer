@@ -50,7 +50,12 @@ If blocking: {"verdict":"block","reason":"..."}
 If requiring approval: {"verdict":"approve","reason":"..."}`;
 
 export function buildUserMessage(command: string): string {
-  return `## Command to classify\n\`\`\`\n${command}\n\`\`\``;
+  // Indent command instead of code fence to prevent backtick injection
+  const indented = command
+    .split("\n")
+    .map((line) => `    ${line}`)
+    .join("\n");
+  return `## Command to classify\n\n${indented}`;
 }
 
 export { SYSTEM_PROMPT };

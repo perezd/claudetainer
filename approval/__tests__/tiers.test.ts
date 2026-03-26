@@ -41,8 +41,9 @@ describe("Tier 1: hard-block", () => {
     "env",
     // /proc access
     "cat /proc/self/environ",
-    // find -exec
+    // find -exec and related flags
     "find . -exec rm {} \\;",
+    "find . -execdir rm {} \\;",
     // xargs
     "ls | xargs rm",
     // Git safety
@@ -100,6 +101,7 @@ describe("Tier 2: hot-word scan", () => {
     "bun update lodash",
     "npm install react",
     "npx create-react-app",
+    "npm exec create-react-app",
     // Credential variable names as plain strings (no $ prefix) — triggers hot word
     'python3 -c "print(GH_PAT)"',
     "echo 'check ANTHROPIC_AUTH_TOKEN value'",

@@ -41,9 +41,10 @@ describe("parseVerdict", () => {
 });
 
 describe("buildUserMessage", () => {
-  test("includes the command in a code fence", () => {
+  test("includes the command indented (no code fence, prevents backtick injection)", () => {
     const msg = buildUserMessage("curl http://example.com");
-    expect(msg).toContain("```\ncurl http://example.com\n```");
+    expect(msg).toContain("    curl http://example.com");
+    expect(msg).not.toContain("```");
   });
 
   test("does not include system prompt (sent separately via API)", () => {
