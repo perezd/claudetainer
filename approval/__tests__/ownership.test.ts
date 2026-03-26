@@ -26,12 +26,24 @@ describe("parseRemoteFromPushCommand", () => {
     expect(parseRemoteFromPushCommand("git push --set-upstream origin main")).toBe("origin");
   });
 
-  test("defaults to 'origin' for bare 'git push'", () => {
-    expect(parseRemoteFromPushCommand("git push")).toBe("origin");
+  test("returns null for bare 'git push' (can't assume origin)", () => {
+    expect(parseRemoteFromPushCommand("git push")).toBeNull();
   });
 
-  test("defaults to 'origin' for 'git push --force'", () => {
-    expect(parseRemoteFromPushCommand("git push --force")).toBe("origin");
+  test("returns null for 'git push --force' without explicit remote", () => {
+    expect(parseRemoteFromPushCommand("git push --force")).toBeNull();
+  });
+
+  test("returns null when value-consuming flag -o is present", () => {
+    expect(parseRemoteFromPushCommand("git push -o ci.skip origin main")).toBeNull();
+  });
+
+  test("returns null when --push-option is present", () => {
+    expect(parseRemoteFromPushCommand("git push --push-option ci.skip origin main")).toBeNull();
+  });
+
+  test("returns null when --repo is present", () => {
+    expect(parseRemoteFromPushCommand("git push --repo=https://example.com origin main")).toBeNull();
   });
 
   test("returns null for non-git-push command", () => {
@@ -176,10 +188,16 @@ describe("isOwnedRemotePush", () => {
     expect(await isOwnedRemotePush("git push origin main")).toBe(false);
   });
 
-  test("allows bare 'git push' with owned origin", async () => {
+  test("returns false for bare 'git push' (can't assume origin)", async () => {
     process.env.GIT_USER_NAME = "alice";
     mockGitRemote("https://github.com/alice/repo.git");
-    expect(await isOwnedRemotePush("git push")).toBe(true);
+    expect(await isOwnedRemotePush("git push")).toBe(false);
+  });
+
+  test("returns false when value-consuming flags are present", async () => {
+    process.env.GIT_USER_NAME = "alice";
+    mockGitRemote("https://github.com/alice/repo.git");
+    expect(await isOwnedRemotePush("git push -o ci.skip origin main")).toBe(false);
   });
 
   test("returns false for non-push commands", async () => {

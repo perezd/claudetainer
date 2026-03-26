@@ -31,22 +31,40 @@ export function evaluateTiers(command: string, rules: Rules): TierResult {
 
 const GIT_PUSH_RE = /^git\s+push\b/;
 
+// Flags that consume the next token as a value (e.g., -o <value>, --repo <value>).
+// If present, we can't reliably parse the remote name, so we refuse the exemption.
+const VALUE_CONSUMING_FLAGS = /^(-o|--push-option|--repo|--receive-pack|--exec|--signed)$/;
+
 /**
  * Parse the target remote name from a git push command string.
  * Skips flags (tokens starting with -). Returns the first positional
- * argument after "git push", or "origin" if none found.
- * Returns null if the command is not a git push.
+ * argument after "git push".
+ * Returns null if:
+ *   - the command is not a git push
+ *   - no explicit remote is specified (bare "git push" — can't assume origin
+ *     because git config like remote.pushDefault may override it)
+ *   - value-consuming flags are present (e.g., -o <value>) which make
+ *     positional parsing unreliable
  */
 export function parseRemoteFromPushCommand(command: string): string | null {
   if (!GIT_PUSH_RE.test(command)) return null;
 
   // Tokenize everything after "git push"
   const afterPush = command.replace(GIT_PUSH_RE, "").trim();
-  if (!afterPush) return "origin";
+  if (!afterPush) return null;
 
   const tokens = afterPush.split(/\s+/);
+
+  // Bail if any value-consuming flags are present — positional parsing is unreliable
+  for (const token of tokens) {
+    if (VALUE_CONSUMING_FLAGS.test(token)) return null;
+    // Also catch --option=value forms of value-consuming flags
+    const eqFlag = token.split("=")[0];
+    if (VALUE_CONSUMING_FLAGS.test(eqFlag)) return null;
+  }
+
   const firstPositional = tokens.find((t) => !t.startsWith("-"));
-  return firstPositional ?? "origin";
+  return firstPositional ?? null;
 }
 
 /**
