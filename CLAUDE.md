@@ -1,0 +1,169 @@
+# Claudetainer
+
+## Security Framework
+
+This project enforces a three-layer security model. You must evaluate every change against all three layers.
+
+| Layer                   | Defense                                                                                                                                 | Protects Against                                                                      | Key Files                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **Container Hardening** | Non-root user (UID 1000), read-only rootfs, size-limited tmpfs (512MB /workspace, 256MB /home/claude, 128MB /tmp)                       | Privilege escalation, persistent compromise, disk-based DoS                           | `Dockerfile`, `scripts/entrypoint.sh`                                              |
+| **Network Isolation**   | Default-deny iptables (OUTPUT DROP), domain allowlist, CoreDNS NXDOMAIN for unlisted domains, metadata IP blocks, UDP drop (except DNS) | Data exfiltration, C2 communication, unauthorized API access, metadata endpoint abuse | `network/domains.conf`, `network/Corefile.template`, `network/refresh-iptables.sh` |
+| **Command Approval**    | Tier 1 regex hard-block, Tier 2 hot-word escalation, Tier 3 Haiku LLM classification                                                    | Dangerous command execution, credential leaks, lateral movement, tmux injection       | `approval/rules.conf`, `approval/check-command.ts`, `approval/classifier.ts`       |
+
+**Defense-in-depth:** No single layer is sufficient alone. If you weaken one layer, you must add compensating controls in another. Each layer is independently enforceable — network isolation works even if command approval is bypassed, and vice versa.
+
+**Credentials:** `GH_PAT`, `CLAUDE_CODE_OAUTH_TOKEN`, and `FLY_ACCESS_TOKEN` are the high-value secrets. Direct variable references (e.g., `$GH_PAT`) are Tier 1 hard-blocked. Indirect references (variable names in strings) are Tier 2 escalated to Haiku. Never add code paths that leak these to stdout, logs, or network.
+
+---
+
+## Modification Protocol
+
+### Layer-Impact Assessment
+
+Before every modification, you must explicitly state:
+
+1. Which security layers are affected (or "none").
+2. Why — a brief justification, not just a label.
+3. Whether a full panel review is triggered.
+
+### Panel Review
+
+A full synthetic panel review is required for: changes to any security-layer file (see key files above), new scripts that run as root, Dockerfile modifications, new binaries or packages, domain allowlist changes, approval rule changes, credential handling changes, and new designs or specifications.
+
+**Core panel (always present):**
+
+1. Linux container security specialist
+2. Cloud infrastructure security engineer
+3. Offensive security / red team analyst
+4. Compliance and risk management advisor
+
+**Flex specialists (add based on change scope):**
+
+- DNS / network protocol expert — CoreDNS, iptables, domain allowlist changes
+- Supply chain security specialist — new dependencies, package sources, build pipeline changes
+- Fly.io platform specialist — deployment config, machine sizing, Fly API usage
+- Identity / access management expert — credential flows, auth mechanisms, token handling
+
+Select relevant flex specialists based on the nature of the change.
+
+**Process:**
+
+1. Each expert evaluates the change from their perspective.
+2. Findings are ranked by severity: critical / high / medium / low.
+3. Each delivers a verdict: **approve**, **approve-with-conditions**, or **request-changes**.
+4. If any expert raises concerns, address them and re-run the panel.
+5. Iterate until all experts sign off without concerns.
+6. Unresolvable risks go to the accepted risks registry (see `docs/accepted-risks.md`).
+
+The panel is not a rubber stamp. Genuinely reason from each expert's perspective and challenge your own assumptions across rounds.
+
+---
+
+## Git Workflow
+
+### Worktree-First Development
+
+All changes happen in git worktrees, never directly on main. Each worktree gets a descriptive branch name reflecting the change.
+
+### PR-Based Integration
+
+Every change goes through a pull request — no direct commits to main. PR descriptions must include:
+
+- Summary of the change
+- Layer-impact assessment
+- Panel review output with final sign-off (if applicable)
+- Test plan
+
+### PR Lifecycle
+
+After creating a PR, poll periodically for comments and review feedback. Address reviewer comments, push updates, and re-request review as needed. Continue polling until the PR is approved and merged, or closed. Never abandon a PR — see it through to resolution.
+
+When receiving PR review feedback, always use `/receiving-code-review` before implementing suggestions.
+
+### Conventional Commits
+
+All commit messages follow the conventional commits standard:
+
+- Format: `type(scope): description`
+- Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`
+- Scope references the affected layer or component when relevant:
+  - `feat(approval): add hot word for bunx`
+  - `fix(network): add missing domain to allowlist`
+  - `refactor(entrypoint): reorder boot sequence`
+  - `docs: update accepted risks registry`
+- Describe the "why" not just the "what."
+
+### Formatting
+
+Run `bunx prettier --write "**/*.{ts,md}"` on all TypeScript and Markdown files before committing. Run `bunx prettier --check "**/*.{ts,md}"` to verify.
+
+---
+
+## Accepted Risks
+
+Unresolvable risks identified by the panel are tracked in `docs/accepted-risks.md`. See that file for the registry format and current entries. Never silently delete a risk — mark it as resolved with a date and reference to the resolving PR.
+
+---
+
+## Project Reference
+
+### Commands
+
+```
+cd approval && bun test              # Run approval classifier unit tests
+bunx prettier --check "**/*.{ts,md}" # Check formatting
+bunx prettier --write "**/*.{ts,md}" # Fix formatting
+```
+
+Container builds are manual. Never build or push Docker images.
+
+### Directory Map
+
+- `approval/` — Command approval pipeline (TypeScript, compiled with `bun build --compile`). Tests in `approval/__tests__/`.
+- `network/` — Network isolation (domain allowlist, CoreDNS config, iptables refresh).
+- `scripts/` — Runtime scripts (entrypoint/PID 1, SSH handler, session namer, status line).
+- `Dockerfile` — Multi-stage container build (Debian bookworm-slim).
+- `claude-settings.json` — Claude Code runtime config (model, hooks, plugins, status line).
+- `approval/rules.conf` — Block rules (Tier 1 regex) and hot words (Tier 2 substring).
+
+### Boot Sequence
+
+`scripts/entrypoint.sh` runs as root with a strict dependency order:
+
+1. Validate secrets
+2. Mount tmpfs (filesystem hardening)
+3. Start CoreDNS (DNS filtering)
+4. Apply iptables (network isolation)
+5. Configure git/gh/npm auth (credential setup)
+6. Copy Claude settings and plugins
+7. Remount rootfs read-only
+8. Clone repo
+9. Readiness checks
+
+This order matters. Filesystem hardening before network setup. Network setup before repo clone. Preserve this chain.
+
+### Testing
+
+- Approval rule changes must include test cases in `approval/__tests__/`.
+- Network changes must be validated against the domain allowlist.
+- Script changes must work under the read-only rootfs constraint.
+
+---
+
+## Required Skills
+
+These superpowers skills are mandatory process gates — not optional.
+
+| Trigger                                                                  | Skill                             |
+| ------------------------------------------------------------------------ | --------------------------------- |
+| Starting any new feature, design, or creative work — no matter how small | `/brainstorming`                  |
+| Receiving PR review comments or code review feedback                     | `/receiving-code-review`          |
+| Encountering any bug, test failure, or unexpected behavior               | `/systematic-debugging`           |
+| Implementation plan is ready to execute                                  | `/executing-plans`                |
+| About to claim work is complete, fixed, or passing                       | `/verification-before-completion` |
+| Implementation is complete and ready to integrate                        | `/finishing-a-development-branch` |
+| Completing a task or major feature                                       | `/requesting-code-review`         |
+
+**Workflow order:** `/brainstorming` → `/writing-plans` → `/executing-plans` → `/verification-before-completion` → `/requesting-code-review` or `/finishing-a-development-branch`.
+
+`/systematic-debugging` and `/receiving-code-review` are reactive — invoke when their triggers occur at any point.
