@@ -153,12 +153,34 @@ fi
 echo '{"hasCompletedOnboarding": true}' > /home/claude/.claude.json
 chown claude:claude /home/claude/.claude.json
 
-# === 6. Lock filesystem ===
+# === 6. Install plugins (before FS lock — install may write to root FS) ===
+echo "[ENTRYPOINT] Installing plugins..."
+sudo -u claude \
+  HOME=/home/claude \
+  PATH="/home/claude/.local/bin:/home/claude/.bun/bin:/usr/local/bin:/usr/bin:/bin" \
+  GH_CONFIG_DIR="/opt/gh-config" \
+  CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
+  LANG="${LANG:-en_US.UTF-8}" \
+  LC_ALL="${LC_ALL:-en_US.UTF-8}" \
+  claude plugin install superpowers@claude-plugins-official 2>&1 \
+  || echo "[ENTRYPOINT] WARNING: Plugin install failed (superpowers)" >&2
+
+sudo -u claude \
+  HOME=/home/claude \
+  PATH="/home/claude/.local/bin:/home/claude/.bun/bin:/usr/local/bin:/usr/bin:/bin" \
+  GH_CONFIG_DIR="/opt/gh-config" \
+  CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
+  LANG="${LANG:-en_US.UTF-8}" \
+  LC_ALL="${LC_ALL:-en_US.UTF-8}" \
+  claude plugin install typescript-lsp@claude-plugins-official 2>&1 \
+  || echo "[ENTRYPOINT] WARNING: Plugin install failed (typescript-lsp)" >&2
+
+# === 7. Lock filesystem ===
 # After all setup, remount root as read-only
 mount -o remount,ro /
 echo "[ENTRYPOINT] Root filesystem locked (read-only)"
 
-# === 7. Clone repo (optional) ===
+# === 8. Clone repo (optional) ===
 if [[ -n "${REPO_URL:-}" ]]; then
   echo "[ENTRYPOINT] Cloning $REPO_URL..."
   # Clone as root (has access to git credentials), then give full ownership to claude
@@ -182,28 +204,6 @@ cat > /home/claude/.claude.json <<EOF
 }
 EOF
 chown claude:claude /home/claude/.claude.json
-
-# === 8. Install plugins (runtime, needs network) ===
-echo "[ENTRYPOINT] Installing plugins..."
-sudo -u claude \
-  HOME=/home/claude \
-  PATH="/home/claude/.local/bin:/home/claude/.bun/bin:/usr/local/bin:/usr/bin:/bin" \
-  GH_CONFIG_DIR="/opt/gh-config" \
-  CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
-  LANG="${LANG:-en_US.UTF-8}" \
-  LC_ALL="${LC_ALL:-en_US.UTF-8}" \
-  claude plugin install superpowers@claude-plugins-official 2>&1 \
-  || echo "[ENTRYPOINT] WARNING: Plugin install failed (superpowers)" >&2
-
-sudo -u claude \
-  HOME=/home/claude \
-  PATH="/home/claude/.local/bin:/home/claude/.bun/bin:/usr/local/bin:/usr/bin:/bin" \
-  GH_CONFIG_DIR="/opt/gh-config" \
-  CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
-  LANG="${LANG:-en_US.UTF-8}" \
-  LC_ALL="${LC_ALL:-en_US.UTF-8}" \
-  claude plugin install typescript-lsp@claude-plugins-official 2>&1 \
-  || echo "[ENTRYPOINT] WARNING: Plugin install failed (typescript-lsp)" >&2
 
 # === 9. Readiness verification ===
 READY=true
