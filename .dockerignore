@@ -4,5 +4,3 @@ docs
 LICENSE
 .github
 **/__tests__/**
-Dockerfile
-.dockerignore
