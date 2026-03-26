@@ -29,8 +29,7 @@ export function evaluateTiers(command: string, rules: Rules): TierResult {
 
 // --- Main entry point (only runs when executed directly) ---
 
-const isMainModule =
-  typeof Bun !== "undefined" && Bun.main === import.meta.path;
+const isMainModule = import.meta.main === true;
 
 if (isMainModule) {
   try {
