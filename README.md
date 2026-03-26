@@ -214,7 +214,7 @@ Switch panes with `Ctrl-b ↓` / `Ctrl-b ↑` or click with the mouse.
 
 Claude Code runs with `--dangerously-skip-permissions` but has a PreToolUse hook that enforces a three-tier command classification pipeline:
 
-- **Tier 1 — Hard-block** (instant): Dangerous commands that are never allowed (sudo, eval, rm -rf /, git push --force, credential leaks, etc.)
+- **Tier 1 — Hard-block** (instant): Dangerous commands that are never allowed (sudo, eval, rm -rf /, git push --force, credential leaks, etc.). **Exception:** `git push` to a remote owned by `GIT_USER_NAME` (your fork) is allowed, including force push and push to main — but `--delete` remains blocked.
 - **Tier 2 — Hot-word scan** (instant): If the command contains a risky keyword (curl, bun add, pip install, etc.), escalate to Tier 3. Otherwise, allow.
 - **Tier 3 — Haiku classification** (1-3s): A Haiku LLM classifies the command as allow, block, or approve. For approve, Claude Code's native permission prompt is shown to the user.
 
@@ -270,6 +270,7 @@ The machine is configured with `--restart no` and `--autostart=false`, so it sta
 - **Three-tier pipeline**: Hard-block (regex) → hot-word scan (substring) → Haiku LLM classification (via `claude -p` CLI subprocess)
 - **Default-allow posture**: Commands without hot words are allowed (network layer is primary enforcement)
 - **Native approval UX**: Haiku's "approve" verdict triggers Claude Code's built-in permission prompt — no custom token system
+- **Git push ownership exemption**: Before tier evaluation, `git push` commands are checked against the remote URL. If the GitHub owner in the remote matches `GIT_USER_NAME` (case-insensitive), the push is allowed — enabling the fork-branch-PR workflow. `--delete` pushes remain blocked even on owned remotes. Falls through to normal blocking on any error (fail-closed).
 - **Credential leak prevention**: Direct references to `$GH_PAT` and `$CLAUDE_CODE_OAUTH_TOKEN` are hard-blocked; indirect references (variable names as strings) are escalated to Haiku
 - **Fly.io auth blast radius**: Fly tokens are org-scoped (unlike the fine-grained GH_PAT). An authenticated session grants access to ALL apps in the org. Use short-lived tokens (`fly tokens create --expiry 1h`) or a dedicated Fly org.
 
