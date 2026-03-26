@@ -10,12 +10,13 @@ The container has no way to interact with Fly.io infrastructure. Operators need 
 
 ### Installation
 
-Install flyctl in the Dockerfile using the official installer. Only `fly` is symlinked to `/usr/local/bin/` — no `flyctl` alias. This halves the hot-word and block-pattern rules since we only need `^fly\s+` patterns, not `^fly(ctl)?\s+`.
+Install flyctl in the Dockerfile using the official installer, then copy the binary to `/usr/local/bin/fly` (not a symlink — `/root` is `0700` on Debian, inaccessible to the `claude` user). No `flyctl` alias, which halves the rule count.
 
 ```dockerfile
 # Fly CLI
 RUN curl -fsSL https://fly.io/install.sh | sh \
-    && ln -s /root/.fly/bin/flyctl /usr/local/bin/fly
+    && cp -L /root/.fly/bin/flyctl /usr/local/bin/fly \
+    && chmod 755 /usr/local/bin/fly
 ```
 
 ### Authentication
@@ -46,14 +47,14 @@ Only `api.fly.io` is needed. The bare `fly.io` domain is used for browser-based 
 
 ```conf
 # Fly.io credential management (user handles interactively)
-block-pattern:^fly\s+auth\b
-block-pattern:^fly\s+tokens?\b
+block-pattern:(^\s*|[;&|({$]\s*)fly\s+auth\b
+block-pattern:(^\s*|[;&|({$]\s*)fly\s+tokens?\b
 
 # Fly.io lateral movement (SSH/proxy/sftp to other machines)
-block-pattern:^fly\s+ssh\b
-block-pattern:^fly\s+proxy\b
-block-pattern:^fly\s+sftp\b
-block-pattern:^fly\s+console\b
+block-pattern:(^\s*|[;&|({$]\s*)fly\s+ssh\b
+block-pattern:(^\s*|[;&|({$]\s*)fly\s+proxy\b
+block-pattern:(^\s*|[;&|({$]\s*)fly\s+sftp\b
+block-pattern:(^\s*|[;&|({$]\s*)fly\s+console\b
 
 # Fly.io credential variable leak prevention
 block-pattern:\$\{?(FLY_ACCESS_TOKEN|FLY_API_TOKEN)\b
@@ -86,7 +87,7 @@ hot:FLY_API_TOKEN
 
 **Why enumerate subcommands instead of `hot:fly`?** The word `fly` is a common 3-letter substring. The rules parser trims values (`.trim()` in `rules.ts`), so `hot:fly ` (with trailing space) would become `hot:fly`, matching `butterfly`, `firefly`, etc. Enumerating specific mutating subcommands avoids this entirely.
 
-**Read-only commands (`fly status`, `fly logs`, `fly releases`, etc.) are NOT hot-worded.** They pass through as default-allow since they only read information. This keeps read-only operations fast (no Haiku latency).
+**Simple read-only commands (`fly status`, `fly logs`, `fly releases`, `fly version`) are NOT hot-worded** and pass through with no Haiku latency. Some read-only infrastructure subcommands (e.g., `fly apps list`, `fly machine list`, `fly ips list`) do match the broad hot-word prefixes and are escalated to Haiku, which correctly classifies them as ALLOW. The tradeoff is 1-3s latency on these commands in exchange for simpler, more maintainable rules.
 
 Haiku then classifies hot-worded commands:
 - `fly deploy` → **approve** (state-changing deployment)
