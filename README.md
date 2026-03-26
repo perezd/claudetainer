@@ -342,7 +342,6 @@ fly machine run ghcr.io/perezd/claudetainer:latest \
 /opt/
 ├── approval/
 │   ├── check-command      # Compiled classifier binary (bun build --compile)
-│   ├── check-command.sh   # Thin wrapper that execs the binary
 │   └── rules.conf         # Block/hot-word rules
 ├── network/
 │   ├── domains.conf       # Domain allowlist
@@ -357,7 +356,7 @@ fly machine run ghcr.io/perezd/claudetainer:latest \
 
 /home/claude/            # tmpfs, 256MB — claude user home
 ├── .claude/
-│   └── settings.json    # Root-owned, immutable hook config
+│   └── settings.json    # Hook config (claude-owned, deletable — accepted risk)
 ├── .claude.json         # Onboarding bypass
 ├── .npmrc               # GitHub Packages auth
 ├── .local/bin/claude    # Symlink → /usr/local/bin/claude
