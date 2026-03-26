@@ -12,13 +12,13 @@ Specific failure: `(cd /workspace/repo/hadron/packages/cli && bun add --exact lo
 
 ### Implementation Language
 
-The hook is implemented in TypeScript, run via `bun run`. This gives us:
+The hook is implemented in TypeScript, compiled to a single native binary via `bun build --compile`. This gives us:
 - Proper JSON parsing without shell fragility
 - Structured regex with `RegExp` objects and `.test()` (no shell quoting issues)
-- Direct Anthropic SDK usage via `@anthropic-ai/sdk` (no `claude -p` subprocess overhead)
+- Integration with Claude via the `claude -p` CLI (reuses existing OAuth auth, no separate API key needed)
 - Type-safe verdict handling with discriminated unions
 
-The project adds a `package.json` and `tsconfig.json` under `approval/` to keep the TS scope contained. The Dockerfile installs dependencies at build time (`bun install --frozen-lockfile`).
+The project adds a `package.json` and `tsconfig.json` under `approval/` for development/testing. The Dockerfile compiles to a self-contained binary at build time — no runtime npm dependencies.
 
 ### Hook Protocol
 
@@ -72,7 +72,7 @@ Command in (JSON on stdin from Claude Code PreToolUse hook)
     |   Match -> escalate to Tier 3.
     |
     +- Tier 3: Haiku classification (1-3s)
-        Send command to Haiku via Anthropic SDK.
+        Send command to Haiku via `claude -p`.
         Returns verdict:
           allow  -> allow
           block  -> deny with reason
@@ -104,8 +104,8 @@ block-pattern:^chmod\s+777\b
 block-pattern:.*/proc/
 
 # Credential leak prevention: block direct references to secret env vars.
-# Catches echo $GH_PAT, printf "$CLAUDE_CODE_OAUTH_TOKEN", ${ANTHROPIC_AUTH_TOKEN}, etc.
-block-pattern:\$\{?(CLAUDE_CODE_OAUTH_TOKEN|GH_PAT|ANTHROPIC_AUTH_TOKEN)\b
+# Catches echo $GH_PAT, printf "$CLAUDE_CODE_OAUTH_TOKEN", etc.
+block-pattern:\$\{?(CLAUDE_CODE_OAUTH_TOKEN|GH_PAT)\b
 
 # Hot words: presence anywhere triggers Haiku review (substring match).
 # Includes credential variable names so any indirect reference is escalated to Haiku
@@ -125,7 +125,6 @@ hot:pip3 install
 hot:pipx
 hot:CLAUDE_CODE_OAUTH_TOKEN
 hot:GH_PAT
-hot:ANTHROPIC_AUTH_TOKEN
 ```
 
 Scan logic (all in TypeScript):
@@ -137,29 +136,27 @@ All `block:` and `block-pattern:` rules are processed together in Tier 1 before 
 
 ### Haiku Classification
 
-Invoked directly via `@anthropic-ai/sdk` using the `ANTHROPIC_AUTH_TOKEN` environment variable (derived from `CLAUDE_CODE_OAUTH_TOKEN` at container startup). This avoids the overhead of spawning a `claude -p` subprocess and gives us structured JSON parsing without shell fragility.
+Invoked via `claude -p --model claude-haiku-4-5-20251001 --max-turns 1`, which authenticates using the existing `CLAUDE_CODE_OAUTH_TOKEN` natively. The prompt is piped via stdin to avoid shell argument length/escaping issues. No separate API key is needed.
 
 ```typescript
-const client = new Anthropic({ timeout: 10_000 }); // 10s per attempt, 2 attempts max = 20s < 30s hook timeout
-const response = await client.messages.create({
-  model: "claude-haiku-4-5-20251001",
-  max_tokens: 256,
-  messages: [{ role: "user", content: prompt }],
-});
+const proc = Bun.spawn(
+  ["claude", "-p", "--model", "claude-haiku-4-5-20251001", "--max-turns", "1", "-"],
+  {
+    stdin: new TextEncoder().encode(prompt),
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env, CLAUDE_SESSION_NAMER: "1" },
+  },
+);
 ```
 
-The SDK reads `ANTHROPIC_AUTH_TOKEN` from the environment (OAuth bearer token, not API key). The entrypoint must export it:
-```bash
-export ANTHROPIC_AUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN"
-```
+`CLAUDE_SESSION_NAMER=1` prevents the Stop hook's session-namer from firing during the classification call.
 
-**Model retirement:** If Anthropic retires `claude-haiku-4-5-20251001`, the SDK returns an API error, which triggers fail-closed behavior — all Tier 3 commands are blocked until the model string is updated.
-
-No recursion guard needed — the SDK makes a direct API call, not a Claude Code tool invocation, so the PreToolUse hook is never triggered.
+**Model retirement:** If Anthropic retires `claude-haiku-4-5-20251001`, the `claude -p` call fails, which triggers fail-closed behavior — all Tier 3 commands are blocked until the model string is updated.
 
 The prompt includes:
 1. System context defining classification rules
-2. The full command being evaluated (inside a fenced code block to resist prompt injection)
+2. The full command being evaluated (inside `<command>` tags to resist prompt injection)
 
 Response format — single-line JSON, parsed with `JSON.parse()`:
 
@@ -282,7 +279,6 @@ exec bun run /opt/approval/check-command.ts
 
 **`approval/check-command.ts`** (main logic):
 ```typescript
-import Anthropic from "@anthropic-ai/sdk";
 import { readFileSync } from "fs";
 
 const RULES_FILE = "/opt/approval/rules.conf";
@@ -350,7 +346,7 @@ function outputDecision(decision: "allow" | "deny" | "ask", reason?: string) {
 
 ### Failure Handling
 
-If the Anthropic SDK call fails (network error, timeout, malformed JSON response), default to deny with a message asking the user to intervene. Fail closed, always.
+If the `claude -p` call fails (network error, timeout, malformed JSON response), default to deny with a message asking the user to intervene. Fail closed, always.
 
 This also applies to rule parsing: if `new RegExp(pattern)` throws during rules.conf compilation, the hook outputs a deny decision immediately — blocking all commands until the config is fixed. Bad regex patterns are logged to stderr for debugging.
 
@@ -364,7 +360,7 @@ Preserve the `[HOOK]` stderr logging pattern from the current implementation. Lo
 ### Performance
 
 - Tier 1 + 2: sub-100ms (`RegExp.test()` and `String.includes()` against short rule lists)
-- Tier 3: 1-3s (Haiku API call via Anthropic SDK, 10s client timeout, 2 attempts max = 20s worst case)
+- Tier 3: 1-3s (Haiku via `claude -p` subprocess, 10s timeout, 2 attempts max = 20s worst case)
 - Most commands (git, ls, bun run, etc.) never reach Tier 3
 - Hook timeout: 30s (configured in claude-settings.json), 20s worst case for Tier 3 leaves 10s headroom
 
@@ -400,13 +396,11 @@ By using Claude Code's native `"ask"` permission decision, we eliminate the enti
 ## Files Changed
 
 - `approval/check-command.ts` — new: main hook logic in TypeScript
-- `approval/check-command.sh` — rewrite as thin wrapper: `exec bun run /opt/approval/check-command.ts`
-- `approval/rules.conf` — simplify to block/hot/block-pattern sections. **Migration note:** all existing hard-block patterns from the current rules.conf must be carried forward, including: `.*-exec\b`, `^(ba)?sh\s+-c\b`, tmux injection blocks (`send-keys`, `capture-pane`, `pipe-pane`), git safety rules (`push --force`, `push --delete`, `push main/master`, `remote add/set-url`), gh exfiltration blocks (`gist`, `repo create/delete`, `auth`), and env variable reads (`printenv`, `env`, `/proc/`). The spec's sample rules.conf is illustrative, not exhaustive.
-- `approval/package.json` — new: declares `@anthropic-ai/sdk` dependency
+- `approval/check-command.sh` — rewrite as thin wrapper: `exec /opt/approval/check-command` (compiled binary)
+- `approval/rules.conf` — simplify to block/hot/block-pattern sections. All existing hard-block patterns carried forward.
+- `approval/package.json` — new: dev dependencies only (`@types/bun`)
 - `approval/tsconfig.json` — new: TypeScript config
-- `approval/prompt.ts` — new: Haiku system prompt as a template literal (separate file for readability)
-- `Dockerfile` — add `bun install --frozen-lockfile` step for approval/ dependencies
-- `entrypoint.sh` — export `ANTHROPIC_AUTH_TOKEN` from `CLAUDE_CODE_OAUTH_TOKEN`
+- `Dockerfile` — `bun build --compile` produces single native binary, no runtime npm dependencies
 
 ## Files Removed
 
