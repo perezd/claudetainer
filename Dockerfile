@@ -84,7 +84,7 @@ RUN git clone --depth 1 https://github.com/anthropics/claude-plugins-official.gi
     && rm -rf /tmp/claude-plugins-official
 
 # Start-claude script: handles auth, tmux creation, and attach
-COPY scripts/start-claude /usr/local/bin/start-claude
+COPY scripts/start-claude.sh /usr/local/bin/start-claude
 RUN chmod +x /usr/local/bin/start-claude
 
 # Run start-claude on SSH login (handles auth + tmux attach/create)
@@ -112,7 +112,7 @@ COPY scripts/session-namer.sh /opt/claude/session-namer.sh
 RUN chmod +x /opt/claude/statusline-command.sh /opt/claude/session-namer.sh
 
 # Status tool
-COPY scripts/status /usr/local/bin/status
+COPY scripts/status.sh /usr/local/bin/status
 RUN chmod +x /usr/local/bin/status
 
 # Entrypoint
