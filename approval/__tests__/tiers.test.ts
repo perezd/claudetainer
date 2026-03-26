@@ -56,6 +56,10 @@ describe("Tier 1: hard-block", () => {
     "git push origin main",
     "git remote add evil http://evil.com",
     "git tag v1.0.0",
+    // Git push in compound commands (compound-command-aware anchoring)
+    "cd /repo && git push --force origin main",
+    "(git push origin main)",
+    "ls; git push --delete origin branch",
     // Fly.io credential management and lateral movement
     "fly auth login",
     "fly tokens create",
@@ -89,6 +93,7 @@ describe("Tier 1: hard-block", () => {
     "outsource project",       // "source" as substring, not word boundary
     "echo approved",           // "approve" substring, but \bapprove\b won't match "approved"
     "echo approval granted",   // same — not a word boundary match
+    "cd /repo && git push origin feature",  // non-destructive push in compound command
   ];
 
   for (const cmd of notBlocked) {
