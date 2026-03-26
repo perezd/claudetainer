@@ -59,14 +59,14 @@ Append after the git safety section (after line 55 `block-pattern:^git\s+push\s+
 ```conf
 
 # Fly.io credential management (user handles interactively via ! shell escape)
-block-pattern:^fly\s+auth\b
-block-pattern:^fly\s+tokens?\b
+block-pattern:(^\s*|[;&|({$]\s*)fly\s+auth\b
+block-pattern:(^\s*|[;&|({$]\s*)fly\s+tokens?\b
 
 # Fly.io lateral movement (SSH/proxy/sftp/console to other machines)
-block-pattern:^fly\s+ssh\b
-block-pattern:^fly\s+proxy\b
-block-pattern:^fly\s+sftp\b
-block-pattern:^fly\s+console\b
+block-pattern:(^\s*|[;&|({$]\s*)fly\s+ssh\b
+block-pattern:(^\s*|[;&|({$]\s*)fly\s+proxy\b
+block-pattern:(^\s*|[;&|({$]\s*)fly\s+sftp\b
+block-pattern:(^\s*|[;&|({$]\s*)fly\s+console\b
 ```
 
 - [ ] **Step 2: Add FLY token variables to credential leak block**
@@ -115,7 +115,7 @@ hot:.fly/
 
 - [ ] **Step 4: Run tests to verify no regressions**
 
-Run: `cd /Users/derek/src/claudetainer/approval && bun test`
+Run: `cd approval && bun test`
 Expected: All tests PASS (existing tests should not be affected by additive rule changes).
 
 - [ ] **Step 5: Commit**
@@ -142,7 +142,7 @@ In the `SYSTEM_PROMPT` constant, inside the `## Classification rules` section, a
 
 - [ ] **Step 2: Run tests**
 
-Run: `cd /Users/derek/src/claudetainer/approval && bun test`
+Run: `cd approval && bun test`
 Expected: All tests PASS.
 
 - [ ] **Step 3: Commit**
@@ -159,14 +159,15 @@ git commit -m "feat(fly): add flyctl classification hint to Haiku system prompt"
 **Files:**
 - Verify: `Dockerfile` (already modified, just confirm correctness)
 
-- [ ] **Step 1: Verify the fly symlink**
+- [ ] **Step 1: Verify the fly binary copy**
 
-Confirm `Dockerfile` lines 43-45 read:
+Confirm `Dockerfile` copies the binary (not a symlink — `/root` is `0700` on Debian):
 
 ```dockerfile
 # Fly CLI
 RUN curl -fsSL https://fly.io/install.sh | sh \
-    && ln -s /root/.fly/bin/flyctl /usr/local/bin/fly
+    && cp -L /root/.fly/bin/flyctl /usr/local/bin/fly \
+    && chmod 755 /usr/local/bin/fly
 ```
 
 No changes needed — already in place. No commit for this task.
