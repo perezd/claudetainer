@@ -91,26 +91,33 @@ describe("isOwnedRemotePush", () => {
     Bun.spawn = originalSpawn;
   });
 
+  let lastSpawnArgs: string[] = [];
+
   function mockGitRemote(url: string, exitCode = 0) {
     // @ts-expect-error — partial mock of Bun.spawn for testing
-    Bun.spawn = () => ({
-      stdout: new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(url + "\n"));
-          controller.close();
-        },
-      }),
-      stderr: new ReadableStream({
-        start(controller) { controller.close(); },
-      }),
-      exited: Promise.resolve(exitCode),
-    });
+    Bun.spawn = (args: string[]) => {
+      lastSpawnArgs = args;
+      return {
+        stdout: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(url + "\n"));
+            controller.close();
+          },
+        }),
+        stderr: new ReadableStream({
+          start(controller) { controller.close(); },
+        }),
+        exited: Promise.resolve(exitCode),
+      };
+    };
   }
 
   test("allows push to owned remote", async () => {
     process.env.GIT_USER_NAME = "alice";
     mockGitRemote("https://github.com/alice/repo.git");
     expect(await isOwnedRemotePush("git push origin main")).toBe(true);
+    // Verify spawn was called with --push and correct remote
+    expect(lastSpawnArgs).toEqual(["git", "remote", "get-url", "--push", "origin"]);
   });
 
   test("denies push to non-owned remote", async () => {
@@ -123,6 +130,8 @@ describe("isOwnedRemotePush", () => {
     process.env.GIT_USER_NAME = "alice";
     mockGitRemote("https://github.com/alice/repo.git");
     expect(await isOwnedRemotePush("git push my-fork feature")).toBe(true);
+    // Verify spawn was called with the parsed remote name, not hardcoded "origin"
+    expect(lastSpawnArgs).toEqual(["git", "remote", "get-url", "--push", "my-fork"]);
   });
 
   test("case-insensitive username match", async () => {
