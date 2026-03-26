@@ -15,6 +15,7 @@ describe("Tier 1: hard-block", () => {
     "sudo rm -rf /",
     "eval 'malicious code'",
     "exec /bin/sh",
+    " exec /bin/sh",  // leading whitespace
     "(exec /bin/sh)",
     "$(exec /bin/sh)",
     "source ~/.bashrc",

@@ -4,9 +4,9 @@
 
 **Goal:** Replace the fragile regex/shell-based command approval hook with a TypeScript three-tier pipeline (hard-block → hot-word → Haiku LLM classification) using Claude Code's native `"ask"` permission prompt.
 
-**Architecture:** A thin shell wrapper (`check-command.sh`) invokes `bun run check-command.ts`. The TS script reads rules from `rules.conf`, runs Tier 1 (regex block) and Tier 2 (substring hot-word) checks instantly, then escalates to Tier 3 (Anthropic SDK → Haiku classification) only when hot words are detected. All decisions are communicated via Claude Code's PreToolUse JSON hook protocol (`allow`/`deny`/`ask`).
+**Architecture:** A thin shell wrapper (`check-command.sh`) execs a compiled binary (built via `bun build --compile`). The binary reads rules from `rules.conf`, runs Tier 1 (regex block) and Tier 2 (substring hot-word) checks instantly, then escalates to Tier 3 (`claude -p` → Haiku classification) only when hot words are detected. All decisions are communicated via Claude Code's PreToolUse JSON hook protocol (`allow`/`deny`/`ask`).
 
-**Tech Stack:** TypeScript, Bun runtime, `@anthropic-ai/sdk`, Claude Code PreToolUse hook protocol
+**Tech Stack:** TypeScript, Bun (compile-time), `claude -p` CLI for Haiku calls, Claude Code PreToolUse hook protocol
 
 **Spec:** `docs/superpowers/specs/2026-03-24-haiku-command-classifier-design.md`
 

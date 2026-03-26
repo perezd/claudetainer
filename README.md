@@ -265,7 +265,7 @@ The machine is configured with `--restart no` and `--autostart=false`, so it sta
 ### Layer 3: Command Classification
 
 - **PreToolUse hook**: Every Bash tool invocation passes through a compiled TypeScript classifier
-- **Three-tier pipeline**: Hard-block (regex) → hot-word scan (substring) → Haiku LLM classification (Anthropic SDK)
+- **Three-tier pipeline**: Hard-block (regex) → hot-word scan (substring) → Haiku LLM classification (via `claude -p` CLI subprocess)
 - **Default-allow posture**: Commands without hot words are allowed (network layer is primary enforcement)
 - **Native approval UX**: Haiku's "approve" verdict triggers Claude Code's built-in permission prompt — no custom token system
 - **Credential leak prevention**: Direct references to `$GH_PAT` and `$CLAUDE_CODE_OAUTH_TOKEN` are hard-blocked; indirect references (variable names as strings) are escalated to Haiku
