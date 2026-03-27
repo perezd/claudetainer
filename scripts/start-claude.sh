@@ -8,8 +8,22 @@ START_LOG="/tmp/start-claude.log"
 export LANG="${LANG:-en_US.UTF-8}"
 export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 
+# Load OTEL env vars if configured by entrypoint
+if [[ -f /tmp/otel-env ]]; then
+  # shellcheck disable=SC1091
+  set -a
+  source /tmp/otel-env
+  set +a
+fi
+
 # Helper to run commands as claude user with standard environment
 run_as_claude() {
+  local otel_env=()
+  if [[ -f /tmp/otel-env ]]; then
+    while IFS='=' read -r key value; do
+      otel_env+=("$key=$value")
+    done < /tmp/otel-env
+  fi
   sudo -u claude \
     HOME="$CLAUDE_HOME" \
     PATH="$CLAUDE_HOME/.local/bin:$CLAUDE_HOME/.bun/bin:$PATH" \
@@ -17,6 +31,7 @@ run_as_claude() {
     CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
     LANG="$LANG" \
     LC_ALL="$LC_ALL" \
+    "${otel_env[@]}" \
     "$@"
 }
 
@@ -94,6 +109,14 @@ fi
 # Restore original stdout/stderr before tmux (tee would interfere with TUI)
 exec 1>&3 2>&4 3>&- 4>&-
 
+# Build OTEL env array for sudo passthrough
+OTEL_ENV_ARGS=()
+if [[ -f /tmp/otel-env ]]; then
+  while IFS='=' read -r key value; do
+    OTEL_ENV_ARGS+=("$key=$value")
+  done < /tmp/otel-env
+fi
+
 # Start Claude Code in tmux as the claude user
 sudo -u claude \
   HOME="$CLAUDE_HOME" \
@@ -103,6 +126,7 @@ sudo -u claude \
   COLORTERM="truecolor" \
   LANG="$LANG" \
   LC_ALL="$LC_ALL" \
+  "${OTEL_ENV_ARGS[@]}" \
   tmux -f /tmp/.tmux.conf new-session -d -s claude \
     -c "$WORK_DIR" \
     "claude --dangerously-skip-permissions"
@@ -115,6 +139,7 @@ sudo -u claude \
   COLORTERM="truecolor" \
   LANG="$LANG" \
   LC_ALL="$LC_ALL" \
+  "${OTEL_ENV_ARGS[@]}" \
   tmux -S "$TMUX_SOCKET" split-window -t claude -v -l 20% -c "$WORK_DIR" "bash --login -i"
 
 # Select the Claude Code pane (top) so it's focused on attach
