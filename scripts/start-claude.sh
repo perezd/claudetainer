@@ -2,6 +2,7 @@
 
 TMUX_SOCKET="/tmp/tmux-1000/default"
 CLAUDE_HOME="/home/claude"
+START_LOG="/tmp/start-claude.log"
 
 # Ensure UTF-8 locale for TUI rendering (box-drawing chars, logo, etc.)
 export LANG="${LANG:-en_US.UTF-8}"
@@ -25,6 +26,10 @@ if [[ -n "$EXISTING_SESSION" ]]; then
   tmux -S "$TMUX_SOCKET" select-pane -t "$EXISTING_SESSION.0" 2>/dev/null || true
   exec tmux -S "$TMUX_SOCKET" attach -t "$EXISTING_SESSION"
 fi
+
+# Log first-connect output for debugging (visible on terminal and persisted to file)
+exec 3>&1 4>&2
+exec > >(tee -a "$START_LOG") 2>&1
 
 # Check that the OAuth token is available
 if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
@@ -85,6 +90,9 @@ if run_as_claude claude plugin marketplace add anthropics/claude-plugins-officia
 else
   echo "WARNING: Failed to add marketplace — skipping plugin install" >&2
 fi
+
+# Restore original stdout/stderr before tmux (tee would interfere with TUI)
+exec 1>&3 2>&4 3>&- 4>&-
 
 # Start Claude Code in tmux as the claude user
 sudo -u claude \
