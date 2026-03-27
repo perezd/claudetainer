@@ -75,6 +75,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g typescript typescript-language-server
 
+# Cache-bust: everything below fetches "latest" and must be fresh each build.
+# Pass --build-arg CACHE_BUST=$(date +%s) locally, or use github.run_id in CI.
+ARG CACHE_BUST=0
+
 # Claude Code (install as claude user)
 USER claude
 RUN curl -fsSL https://claude.ai/install.sh | bash

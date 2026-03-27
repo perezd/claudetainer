@@ -46,5 +46,6 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ github.repository }}:latest
+          build-args: CACHE_BUST=${{ github.run_id }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
