@@ -89,16 +89,6 @@ USER claude
 RUN claude install 2>/dev/null || true
 USER root
 
-# Pre-clone superpowers plugin at build time (public repo, no auth needed)
-RUN git clone --depth 1 https://github.com/obra/superpowers.git \
-       /opt/claude-plugins/superpowers
-
-# Pre-clone TypeScript LSP plugin at build time
-RUN git clone --depth 1 https://github.com/anthropics/claude-plugins-official.git /tmp/claude-plugins-official \
-    && test -d /tmp/claude-plugins-official/plugins/typescript-lsp \
-    && cp -r /tmp/claude-plugins-official/plugins/typescript-lsp /opt/claude-plugins/typescript-lsp \
-    && rm -rf /tmp/claude-plugins-official
-
 # Start-claude script: handles auth, tmux creation, and attach
 COPY scripts/start-claude.sh /usr/local/bin/start-claude
 RUN chmod +x /usr/local/bin/start-claude
