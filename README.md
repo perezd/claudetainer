@@ -251,7 +251,7 @@ The machine is configured with `--restart no` and `--autostart=false`, so it sta
 - **Read-only root filesystem**: After setup, the root filesystem is remounted read-only (`mount -o remount,ro /`)
 - **tmpfs mounts**: Writable areas are memory-backed and size-limited:
   - `/workspace` (512MB) — working directory for code
-  - `/home/claude` (256MB) — Claude's home directory
+  - `/home/claude` (1GB) — Claude's home directory
   - `/tmp` (128MB) — temporary files
 - **Settings file**: Claude Code's `settings.json` (which configures the approval hook) is owned by the `claude` user. Claude can delete and recreate it, which would remove the hook. This is an accepted risk — iptables is the real enforcement layer, and the hook provides defense-in-depth.
 
@@ -318,7 +318,7 @@ fly machine run ghcr.io/perezd/claudetainer:latest \
 3. Mounts tmpfs over `/workspace`, `/tmp`, `/home/claude`
 4. Recreates binary symlinks wiped by tmpfs mounts
 5. Generates CoreDNS config from domain allowlist, starts CoreDNS
-6. Applies iptables rules, starts 30-minute refresh loop
+6. Applies iptables rules, starts 5-minute refresh loop
 7. Configures git identity, gh CLI auth, npm registry auth
 8. Copies Claude Code settings, skips onboarding wizard
 9. Remounts root filesystem read-only
@@ -332,36 +332,94 @@ fly machine run ghcr.io/perezd/claudetainer:latest \
 3. If a tmux session exists, reattaches to it
 4. Otherwise: verifies auth token, installs plugins, creates tmux session with Claude Code + terminal pane, attaches
 
+### Source Repository Layout
+
+```
+claudetainer/
+├── approval/                    # Command approval pipeline (TypeScript)
+│   ├── __tests__/               # Unit tests (bun test)
+│   │   ├── classifier.test.ts
+│   │   ├── ownership.test.ts
+│   │   ├── rules.test.ts
+│   │   └── tiers.test.ts
+│   ├── check-command.ts         # Entrypoint — PreToolUse hook handler
+│   ├── classifier.ts            # Tier 3 Haiku LLM classifier
+│   ├── hook-output.ts           # Hook response formatting
+│   ├── rules.ts                 # Rule parser (block, block-pattern, hot)
+│   ├── rules.conf               # Block/hot-word rule definitions
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── bun.lock
+├── network/                     # Network isolation layer
+│   ├── domains.conf             # Domain allowlist (one per line)
+│   └── Corefile.template        # CoreDNS base config (catch-all NXDOMAIN)
+├── scripts/                     # Runtime scripts (copied into container)
+│   ├── entrypoint.sh            # PID 1 boot script (see Boot Sequence)
+│   ├── start-claude.sh          # SSH login handler — tmux session manager
+│   ├── refresh-iptables.sh      # Resolves allowlisted domains → iptables rules
+│   ├── gh-wrapper.sh            # gh CLI wrapper ensuring GH_CONFIG_DIR is set
+│   ├── session-namer.sh         # Stop hook — renames tmux session via Haiku
+│   ├── statusline-command.sh    # Status line — model, context usage bar, session
+│   └── status.sh                # Diagnostic tool (iptables drops, CoreDNS status)
+├── docs/
+│   └── accepted-risks.md        # Panel-reviewed accepted risk registry
+├── .github/
+│   └── workflows/
+│       └── build.yml            # CI — builds and pushes image to GHCR
+├── Dockerfile                   # Multi-stage container build (Debian bookworm-slim)
+├── claude-settings.json         # Claude Code runtime settings template
+├── CLAUDE.md                    # Project instructions for Claude Code
+├── LICENSE                      # MIT
+└── README.md
+```
+
+### Scripts
+
+All scripts live in `scripts/` and are copied to `/usr/local/bin/` during the Docker build.
+
+| Script                      | Description                                                                                                                                                                                                                                                                      |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`entrypoint.sh`**         | PID 1 boot script. Runs as root. Validates secrets, mounts tmpfs, starts CoreDNS, applies iptables, configures git/gh/npm auth, installs plugins, remounts rootfs read-only, clones the repo, and runs readiness checks. See [Boot Sequence](#boot-sequence) for the full order. |
+| **`start-claude.sh`**       | SSH login handler (invoked by `.bashrc`). If a tmux session exists, reattaches to it. Otherwise, waits for entrypoint readiness, warms up Claude Code, creates a tmux session with Claude Code in the top pane (80%) and a bash shell in the bottom pane (20%), then attaches.   |
+| **`refresh-iptables.sh`**   | Resolves every domain in `network/domains.conf` to IPs via `dig`, builds an iptables ruleset with OUTPUT DROP default policy and ACCEPT rules for resolved IPs, then atomically applies it with `iptables-restore`. Called once at boot and every 5 minutes thereafter.          |
+| **`gh-wrapper.sh`**         | Thin wrapper around `/usr/bin/gh` that hardcodes `GH_CONFIG_DIR=/opt/gh-config`. Needed because Claude Code's subprocess chain can strip environment variables, which would break `gh` authentication. Installed as `/usr/local/bin/gh` to shadow the real binary.               |
+| **`session-namer.sh`**      | Claude Code Stop hook. After the first assistant response in a session, sends the session context to Haiku to generate a short kebab-case name (e.g., `fixing-auth-bug`), then renames the tmux session. Uses a sentinel file to run only once per session.                      |
+| **`statusline-command.sh`** | Claude Code status line hook. Renders the current model name, a context window usage bar (color-coded green/yellow/red), and the tmux session name. Output appears in Claude Code's status line.                                                                                 |
+| **`status.sh`**             | Diagnostic tool available as the `status` command inside the container. Shows recent iptables drops (from dmesg) and CoreDNS process status.                                                                                                                                     |
+
 ### File Layout (in container)
 
 ```
 /usr/local/bin/
-├── claude          # Claude Code binary
-├── bun             # Bun runtime
-├── bunx            # Bun package runner
-├── coredns         # DNS server
-├── fly             # Fly.io CLI
-├── start-claude    # SSH login handler
-├── status          # Diagnostic tool
-├── just            # Task runner
-└── entrypoint.sh   # Boot script
+├── claude            # Claude Code binary
+├── bun               # Bun runtime
+├── bunx              # Bun package runner
+├── coredns           # DNS server
+├── fly               # Fly.io CLI
+├── gh                # gh-wrapper.sh (shadows /usr/bin/gh)
+├── start-claude      # SSH login handler (start-claude.sh)
+├── status            # Diagnostic tool (status.sh)
+├── just              # Task runner
+└── entrypoint.sh     # Boot script
 
 /opt/
 ├── approval/
-│   ├── check-command      # Compiled classifier binary (bun build --compile)
-│   └── rules.conf         # Block/hot-word rules
+│   ├── check-command        # Compiled classifier binary (bun build --compile)
+│   └── rules.conf           # Block/hot-word rules
 ├── network/
-│   ├── domains.conf       # Domain allowlist
-│   ├── Corefile.template  # CoreDNS base config
-│   └── refresh-iptables.sh
+│   ├── domains.conf         # Domain allowlist
+│   ├── Corefile.template    # CoreDNS base config
+│   └── refresh-iptables.sh  # iptables refresh script
 ├── claude/
-│   └── settings.json      # Claude Code settings template
-└── gh-config/             # Shared gh CLI config (created at runtime)
+│   ├── settings.json        # Claude Code settings template
+│   ├── statusline-command.sh  # Status line hook
+│   └── session-namer.sh      # Session naming hook
+└── gh-config/               # Shared gh CLI config (created at runtime)
 
 /workspace/              # tmpfs, 512MB — working directory
 └── repo/                # Cloned from REPO_URL (if set)
 
-/home/claude/            # tmpfs, 256MB — claude user home
+/home/claude/            # tmpfs, 1GB — claude user home
 ├── .claude/
 │   └── settings.json    # Hook config (claude-owned, deletable — accepted risk)
 ├── .claude.json         # Onboarding bypass
@@ -392,6 +450,18 @@ fly wireguard status
 ```
 
 If it's disconnected, bring it back up through your WireGuard client.
+
+If your network blocks UDP (common on corporate networks, captive portals, or some ISPs), WireGuard tunnels will fail silently. Switch to WebSocket-based tunneling:
+
+```bash
+fly wireguard websockets enable
+```
+
+This wraps WireGuard traffic in a WebSocket over TCP/443, which passes through most firewalls. To revert:
+
+```bash
+fly wireguard websockets disable
+```
 
 ### "CLAUDE_CODE_OAUTH_TOKEN is not set"
 
