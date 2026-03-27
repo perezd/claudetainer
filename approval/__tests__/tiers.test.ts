@@ -75,6 +75,9 @@ describe("Tier 1: hard-block", () => {
     // Fly.io blocks in compound commands
     "cd /workspace && fly auth login",
     "(fly ssh console -a myapp)",
+    // Newline-separated command bypasses
+    "echo ok\ngit push --force origin main", // git push after newline
+    "echo ok\nfly auth login", // fly auth after newline
     // Credential variable direct references
     "echo $GH_PAT",
     'printf "$CLAUDE_CODE_OAUTH_TOKEN"',
