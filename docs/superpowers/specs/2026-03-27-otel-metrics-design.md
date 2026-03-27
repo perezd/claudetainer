@@ -30,7 +30,7 @@ Grafana Cloud accepts OTLP data directly via its OTLP gateway. The gateway multi
 - Claude Code sends OTLP/HTTP directly to Grafana Cloud's OTLP gateway.
 - **Push-based** — no exposed ports, no inbound scraping, no listening endpoint.
 - **No new processes.** No sidecar. No new binary. Just environment variables.
-- **Outbound HTTPS only** to `*.grafana.net`.
+- **Outbound HTTPS only** to the operator-configured OTLP gateway hostname (e.g., `otlp-gateway-prod-us-west-2.grafana.net`). The domain is dynamically injected into CoreDNS and iptables at boot — no static allowlist entry, no network access when the feature is off.
 - **Metrics and events** are exported. Claude Code does not currently emit OTEL traces — if trace support is added in the future, setting `OTEL_TRACES_EXPORTER=otlp` would route them to Tempo with no other changes.
 
 ## Opt-in Mechanism
@@ -75,23 +75,13 @@ The rationale: if you've provided Grafana Cloud credentials, you want full obser
 
 Note: raw file contents and code snippets are never included in telemetry regardless of these settings.
 
+**Data residency:** When enabled with full fidelity, user prompt content and tool parameters leave the container and are stored in Grafana Cloud (a third-party system). The operator is responsible for ensuring this meets their data residency and privacy requirements. The `session_id` and `user_account_uuid` resource attributes on metrics are pseudonymous identifiers that could be correlated to individuals — these become visible to anyone with Grafana Cloud dashboard access.
+
 ### Activation logic
 
-```bash
-if [ -n "${GRAFANA_INSTANCE_ID:-}" ] && [ -n "${GRAFANA_API_TOKEN:-}" ] && [ -n "${GRAFANA_OTLP_ENDPOINT:-}" ]; then
-  export CLAUDE_CODE_ENABLE_TELEMETRY=1
-  export OTEL_METRICS_EXPORTER=otlp
-  export OTEL_LOGS_EXPORTER=otlp
-  export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-  export OTEL_EXPORTER_OTLP_ENDPOINT="$GRAFANA_OTLP_ENDPOINT"
-  export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic $(echo -n "${GRAFANA_INSTANCE_ID}:${GRAFANA_API_TOKEN}" | base64 -w 0)"
-  export OTEL_LOG_USER_PROMPTS="${OTEL_LOG_USER_PROMPTS:-1}"
-  export OTEL_LOG_TOOL_DETAILS="${OTEL_LOG_TOOL_DETAILS:-1}"
-  echo "[ENTRYPOINT] OTEL telemetry enabled → ${GRAFANA_OTLP_ENDPOINT}"
-fi
-```
+Activation is split into two phases in `entrypoint.sh` to satisfy boot-order dependencies (network setup must precede OTLP export). See **Boot Sequence Integration** below for the full logic and sequencing.
 
-When the variables are not set, no OTEL env vars are injected and Claude Code behaves exactly as it does today.
+When the variables are not set, no OTEL env vars are injected, no domain is added to the network layer, and Claude Code behaves exactly as it does today.
 
 ## What You Get in Grafana Cloud
 
@@ -129,19 +119,57 @@ All events from a single user prompt share the same `prompt.id` (UUID), enabling
 
 ## Boot Sequence Integration
 
-The OTEL setup is a conditional env var export in `entrypoint.sh`. It slots in **before Claude Code settings copy** so the env vars are available when Claude Code launches.
+The OTEL setup uses **two-phase activation** in `entrypoint.sh`. The network setup (CoreDNS + iptables) must happen before Claude Code can export, so hostname extraction runs early, while env var export happens later.
+
+### Phase 1: Network setup (before CoreDNS/iptables)
+
+If Grafana credentials are present, extract the hostname from `GRAFANA_OTLP_ENDPOINT` and inject it into the network layer:
+
+```bash
+# Early in entrypoint, before CoreDNS config generation
+if [ -n "${GRAFANA_INSTANCE_ID:-}" ] && [ -n "${GRAFANA_API_TOKEN:-}" ] && [ -n "${GRAFANA_OTLP_ENDPOINT:-}" ]; then
+  GRAFANA_HOST=$(echo "$GRAFANA_OTLP_ENDPOINT" | sed 's|https\?://||' | cut -d/ -f1 | cut -d: -f1)
+  echo "[ENTRYPOINT] OTEL: will allow outbound to $GRAFANA_HOST"
+fi
+```
+
+The extracted `GRAFANA_HOST` is then:
+
+1. **Appended to the CoreDNS config** as a forward zone (during the existing domain iteration loop), so DNS queries for the OTLP gateway resolve correctly.
+2. **Resolved and added to iptables** ACCEPT rules (during the existing iptables refresh), so outbound HTTPS to the gateway IPs is permitted.
+
+### Phase 2: Env var export (before Claude Code settings copy)
+
+The OTEL env vars are exported in the existing step 6 position, after network setup is complete:
+
+```bash
+if [ -n "${GRAFANA_HOST:-}" ]; then
+  export CLAUDE_CODE_ENABLE_TELEMETRY=1
+  export OTEL_METRICS_EXPORTER=otlp
+  export OTEL_LOGS_EXPORTER=otlp
+  export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+  export OTEL_EXPORTER_OTLP_ENDPOINT="$GRAFANA_OTLP_ENDPOINT"
+  export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic $(echo -n "${GRAFANA_INSTANCE_ID}:${GRAFANA_API_TOKEN}" | base64 -w 0)"
+  export OTEL_LOG_USER_PROMPTS="${OTEL_LOG_USER_PROMPTS:-1}"
+  export OTEL_LOG_TOOL_DETAILS="${OTEL_LOG_TOOL_DETAILS:-1}"
+  echo "[ENTRYPOINT] OTEL telemetry enabled → ${GRAFANA_OTLP_ENDPOINT}"
+fi
+```
+
+### Updated boot sequence
 
 ```
 1. Validate secrets
 2. Mount tmpfs
-3. Start CoreDNS
-4. Apply iptables
-5. Configure git/gh/npm auth
-6. ** Set OTEL env vars (if Grafana credentials are set) **
-7. Copy Claude settings
-8. Remount rootfs read-only
-9. Clone repo
-10. Readiness checks
+3. ** Extract GRAFANA_HOST from GRAFANA_OTLP_ENDPOINT (if credentials set) **
+4. Start CoreDNS (with GRAFANA_HOST in forward config, if set)
+5. Apply iptables (with GRAFANA_HOST resolved to IPs, if set)
+6. Configure git/gh/npm auth
+7. ** Export OTEL env vars (if GRAFANA_HOST was extracted) **
+8. Copy Claude settings
+9. Remount rootfs read-only
+10. Clone repo
+11. Readiness checks
 ```
 
 No new background processes. No config files to generate. No auto-restart loops.
@@ -152,13 +180,9 @@ The env vars are exported in the entrypoint (PID 1) shell, so they are inherited
 
 ### Domain allowlist
 
-Add to `domains.conf`:
+**No static changes to `domains.conf`.** The OTLP gateway domain is dynamically injected into CoreDNS and iptables at boot (see Boot Sequence Integration above). When the feature is off, no Grafana-related domain is allowed — zero network impact.
 
-```
-*.grafana.net
-```
-
-This covers all Grafana Cloud regions (`otlp-gateway-prod-*.grafana.net`) and the Grafana UI.
+This approach is more precise than a static wildcard: only the exact operator-configured hostname gets network access, and only when all three credentials are present.
 
 ### Credential protection
 
@@ -171,15 +195,18 @@ block-pattern:\$\{?(GRAFANA_API_TOKEN|GRAFANA_INSTANCE_ID)\b
 # Tier 2: hot-word escalation for indirect references
 hot:GRAFANA_API_TOKEN
 hot:GRAFANA_INSTANCE_ID
+hot:OTEL_EXPORTER_OTLP_HEADERS
 ```
+
+`OTEL_EXPORTER_OTLP_HEADERS` contains the base64-encoded credentials and is escalated to Tier 2 to prevent indirect access.
 
 ### Layer impact assessment
 
-| Layer               | Impact                                                                                                                            |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Container Hardening | **None** — no new binaries, no config files, no privilege changes                                                                 |
-| Network Isolation   | **One wildcard domain added** — `*.grafana.net` for outbound OTLP push (HTTPS only)                                               |
-| Command Approval    | **Two new credentials protected** — `GRAFANA_API_TOKEN` and `GRAFANA_INSTANCE_ID` added to Tier 1 block and Tier 2 hot-word rules |
+| Layer               | Impact                                                                                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Container Hardening | **None** — no new binaries, no config files, no privilege changes                                                                                        |
+| Network Isolation   | **Dynamic domain injection** — OTLP gateway hostname extracted from `GRAFANA_OTLP_ENDPOINT` and added to CoreDNS + iptables at boot. No change when off. |
+| Command Approval    | **Two new credentials protected** — `GRAFANA_API_TOKEN` and `GRAFANA_INSTANCE_ID` (Tier 1 + Tier 2), plus `OTEL_EXPORTER_OTLP_HEADERS` (Tier 2)          |
 
 ### Exposed ports
 
