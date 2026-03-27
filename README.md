@@ -144,7 +144,9 @@ A [GitHub fine-grained Personal Access Token](https://docs.github.com/en/authent
 
 This token should be created on the **robot GitHub account** (not your personal account). It acts as the identity boundary for what Claude can do on GitHub — scoped to exactly the repository you want Claude to work in, no broader.
 
-**How to create one:**
+Fine-grained tokens are recommended when the target repo belongs to a GitHub **organization** the robot account is a member of. However, fine-grained tokens have a [known limitation](https://github.com/community/community/discussions/36441): they can only access repos owned by the token creator's own account or by an org they belong to. They **cannot** access repos owned by another user's personal account. If the robot account is a collaborator on a repo owned by someone else's personal account (not an org), you'll need a [classic Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic) instead. Classic tokens must have at minimum the `read:org`, `read:packages`, and `repo` scopes.
+
+**How to create a fine-grained token (recommended):**
 
 1. Log into the robot GitHub account and go to [github.com/settings/tokens](https://github.com/settings/tokens?type=beta). Click **Generate new token** (fine-grained)
 2. Give it a descriptive name (e.g. `claudetainer - my-repo`)
@@ -183,11 +185,11 @@ fly secrets set CLAUDE_CODE_OAUTH_TOKEN=<token> -a <your-app-name>
 
 These are set via `--env` flags on `fly machine run`. They are not sensitive and don't need to be secrets.
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `GIT_USER_NAME` | No | `claudetainer` | Git commit author name. **Must match the GitHub username/login** (not a display name) for the git push ownership exemption to work. |
-| `GIT_USER_EMAIL` | No | `claudetainer@noreply.github.com` | Git commit author email |
-| `REPO_URL` | No | _(none)_ | HTTPS URL of a GitHub repo to clone on startup. Cloned to `/workspace/repo`. Must be accessible with the `GH_PAT`. |
+| Variable         | Required | Default                           | Description                                                                                                                         |
+| ---------------- | -------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `GIT_USER_NAME`  | No       | `claudetainer`                    | Git commit author name. **Must match the GitHub username/login** (not a display name) for the git push ownership exemption to work. |
+| `GIT_USER_EMAIL` | No       | `claudetainer@noreply.github.com` | Git commit author email                                                                                                             |
+| `REPO_URL`       | No       | _(none)_                          | HTTPS URL of a GitHub repo to clone on startup. Cloned to `/workspace/repo`. Must be accessible with the `GH_PAT`.                  |
 
 ## Usage
 
@@ -294,11 +296,11 @@ Edit `claude-settings.json` to add entries under `mcpServers`. The default confi
 
 ### Machine Sizing
 
-| Size | Memory | Use Case |
-|---|---|---|
-| `shared-cpu-1x` / 1GB | Minimum | Small repos, light tasks |
-| `shared-cpu-1x` / 2GB | Recommended | General development |
-| `shared-cpu-2x` / 4GB | Heavy | Large repos, parallel builds |
+| Size                  | Memory      | Use Case                     |
+| --------------------- | ----------- | ---------------------------- |
+| `shared-cpu-1x` / 1GB | Minimum     | Small repos, light tasks     |
+| `shared-cpu-1x` / 2GB | Recommended | General development          |
+| `shared-cpu-2x` / 4GB | Heavy       | Large repos, parallel builds |
 
 ```bash
 fly machine run ghcr.io/perezd/claudetainer:latest \
@@ -384,6 +386,7 @@ The GHCR package must be set to **public** visibility so Fly.io can pull it with
 ### SSH hangs or times out
 
 Check that your WireGuard tunnel is active:
+
 ```bash
 fly wireguard status
 ```
@@ -393,6 +396,7 @@ If it's disconnected, bring it back up through your WireGuard client.
 ### "CLAUDE_CODE_OAUTH_TOKEN is not set"
 
 The secret wasn't set or the machine needs a restart after setting secrets:
+
 ```bash
 fly secrets set CLAUDE_CODE_OAUTH_TOKEN=<token> -a <your-app-name>
 fly machine restart <machine-id> -a <your-app-name>
@@ -405,6 +409,7 @@ Same as above — set the secret and restart.
 ### Claude Code shows a sign-in prompt
 
 The OAuth token may be expired. Generate a new one:
+
 ```bash
 claude setup-token
 fly secrets set CLAUDE_CODE_OAUTH_TOKEN=<new-token> -a <your-app-name>
@@ -419,12 +424,14 @@ fly secrets set CLAUDE_CODE_OAUTH_TOKEN=<new-token> -a <your-app-name>
 ### Plugin installation fails
 
 The superpowers plugin is installed on first SSH login. If it fails, check:
+
 - Network connectivity (the container needs to reach github.com)
 - `status` command to see if CoreDNS is running and no unexpected drops
 
 ### Command blocked unexpectedly
 
 Check which rule matched by reviewing the hook's stderr logs, or inspect the rules directly:
+
 ```bash
 grep -n 'pattern' /opt/approval/rules.conf
 ```
@@ -434,6 +441,7 @@ If a command is blocked by Tier 1 (hard-block), it cannot be overridden. If it's
 ### UI rendering issues
 
 The container builds tmux 3.6a from source for synchronized output support. If you still see rendering artifacts:
+
 - Ensure your local terminal supports true color (`echo $COLORTERM` should show `truecolor`)
 - Try resizing your terminal window after connecting
 - Ghostty, iTerm2, and Kitty work best; macOS Terminal.app has limited support
@@ -441,10 +449,12 @@ The container builds tmux 3.6a from source for synchronized output support. If y
 ### Fly.io authentication
 
 flyctl is not authenticated by default. To authenticate:
+
 ```bash
 # In the terminal pane or via ! in Claude Code
 ! fly auth login
 ```
+
 The token is stored in memory (tmpfs) and lost on restart.
 
 ## License
