@@ -151,15 +151,18 @@ Container builds are manual. Never build or push Docker images.
 
 1. Validate secrets
 2. Mount tmpfs (filesystem hardening)
-3. Start CoreDNS (DNS filtering)
-4. Apply iptables (network isolation)
-5. Configure git/gh/npm auth (credential setup)
-6. Copy Claude settings
-7. Remount rootfs read-only
-8. Clone repo
-9. Readiness checks
+3. Extract Grafana OTLP hostname (if credentials set)
+4. Start CoreDNS (DNS filtering, with Grafana host if set)
+5. Apply iptables (network isolation, with Grafana host if set)
+6. Configure git/gh/npm auth (credential setup)
+7. Export OTEL env vars (if Grafana credentials set)
+8. Copy Claude settings
+9. Remount rootfs read-only
+10. Clone repo
+11. Readiness checks
 
 Plugins are installed separately in `start-claude.sh` on first SSH connect (after marketplace initialization).
+OTEL env vars are written to `/tmp/otel-env` by the entrypoint and forwarded through `sudo` by `start-claude.sh`.
 
 This order matters. Filesystem hardening before network setup. Network setup before repo clone. Preserve this chain.
 
