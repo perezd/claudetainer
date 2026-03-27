@@ -22,6 +22,7 @@ describe("Tier 1: hard-block", () => {
     "(source ~/.bashrc)", // source in subshell
     "$(source ~/.bashrc)", // source in command substitution
     "cd /tmp && source ~/.bashrc", // source in compound command
+    "echo ok\nsource ~/.bashrc", // source after newline-separated command
     "printenv",
     "approve bun add react",
     // Compound commands — unanchored word-boundary rules still catch these
