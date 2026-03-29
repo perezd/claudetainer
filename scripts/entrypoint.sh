@@ -58,6 +58,22 @@ ln -sf /usr/local/bin/bunx /home/claude/.bun/bin/bunx
 
 # === 2. Network lockdown ===
 
+# OTEL Phase 1: Extract Grafana Cloud hostname for network allowlisting
+# (Phase 2 later writes OTEL env vars to /tmp/otel/otel-env after network setup is complete)
+if [[ -n "${GRAFANA_INSTANCE_ID:-}" ]] && [[ -n "${GRAFANA_API_TOKEN:-}" ]] && [[ -n "${GRAFANA_OTLP_ENDPOINT:-}" ]]; then
+  GRAFANA_HOST=$(echo "$GRAFANA_OTLP_ENDPOINT" | sed 's|https\?://||' | cut -d/ -f1 | cut -d: -f1)
+  # Validate hostname: alphanumeric, hyphens, dots only (prevent Corefile injection)
+  if [[ ! "$GRAFANA_HOST" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]]; then
+    echo "[ENTRYPOINT] ERROR: Invalid hostname in GRAFANA_OTLP_ENDPOINT: $GRAFANA_HOST" >&2
+    unset GRAFANA_HOST
+  else
+    echo "[ENTRYPOINT] OTEL: will allow outbound to $GRAFANA_HOST"
+    # Write to /tmp/otel/ (root:root, mode 700) — isolates from world-writable /tmp
+    mkdir -p /tmp/otel && chmod 700 /tmp/otel
+    echo "$GRAFANA_HOST" > /tmp/otel/extra-domains.conf
+  fi
+fi
+
 # Generate CoreDNS config from domains.conf
 COREFILE="/tmp/Corefile"
 cp /opt/network/Corefile.template "$COREFILE"
@@ -79,6 +95,22 @@ ${domain} {
 }
 EOF
 done < /opt/network/domains.conf
+
+# Append Grafana Cloud OTLP gateway domain (if OTEL is enabled)
+if [[ -n "${GRAFANA_HOST:-}" ]]; then
+  cat >> "$COREFILE" <<EOF
+
+${GRAFANA_HOST} {
+    bind 127.0.0.53
+    template IN AAAA {
+        rcode NOERROR
+    }
+    forward . 8.8.8.8 1.1.1.1
+    log
+    cache 300
+}
+EOF
+fi
 
 # Start CoreDNS with auto-restart
 (while true; do
@@ -127,6 +159,40 @@ cat > /home/claude/.npmrc <<NPMRC
 NPMRC
 chown root:root /home/claude/.npmrc
 chmod 644 /home/claude/.npmrc
+
+# OTEL Phase 2: Write telemetry config for start-claude.sh (network is now configured)
+# Env vars are NOT exported into PID 1 — they are only written to the file and
+# forwarded to the claude user's process by start-claude.sh via sudo.
+if [[ -n "${GRAFANA_HOST:-}" ]]; then
+  mkdir -p /tmp/otel && chmod 700 /tmp/otel
+  # Build OTEL_RESOURCE_ATTRIBUTES: auto-inject Fly identity, then append operator attrs
+  OTEL_ATTRS=""
+  [[ -n "${FLY_APP_NAME:-}" ]] && OTEL_ATTRS="fly.app_name=${FLY_APP_NAME}"
+  if [[ -n "${FLY_MACHINE_ID:-}" ]]; then
+    [[ -n "$OTEL_ATTRS" ]] && OTEL_ATTRS="${OTEL_ATTRS},"
+    OTEL_ATTRS="${OTEL_ATTRS}fly.machine_id=${FLY_MACHINE_ID}"
+  fi
+  if [[ -n "${OTEL_RESOURCE_ATTRIBUTES:-}" ]]; then
+    [[ -n "$OTEL_ATTRS" ]] && OTEL_ATTRS="${OTEL_ATTRS},"
+    OTEL_ATTRS="${OTEL_ATTRS}${OTEL_RESOURCE_ATTRIBUTES}"
+  fi
+  (umask 077; cat > /tmp/otel/otel-env <<OTELENV
+CLAUDE_CODE_ENABLE_TELEMETRY=1
+OTEL_METRICS_EXPORTER=otlp
+OTEL_LOGS_EXPORTER=otlp
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+OTEL_EXPORTER_OTLP_ENDPOINT=$GRAFANA_OTLP_ENDPOINT
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic $(echo -n "${GRAFANA_INSTANCE_ID}:${GRAFANA_API_TOKEN}" | base64 -w 0)
+OTEL_LOG_USER_PROMPTS=${OTEL_LOG_USER_PROMPTS:-1}
+OTEL_LOG_TOOL_DETAILS=${OTEL_LOG_TOOL_DETAILS:-1}
+OTELENV
+  )
+  # Append resource attributes as a separate line (only if non-empty)
+  if [[ -n "$OTEL_ATTRS" ]]; then
+    echo "OTEL_RESOURCE_ATTRIBUTES=${OTEL_ATTRS}" >> /tmp/otel/otel-env
+  fi
+  echo "[ENTRYPOINT] OTEL telemetry enabled → host=${GRAFANA_HOST}"
+fi
 
 # === 4. Claude Code setup ===
 

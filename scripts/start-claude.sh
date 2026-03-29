@@ -8,6 +8,10 @@ START_LOG="/tmp/start-claude.log"
 export LANG="${LANG:-en_US.UTF-8}"
 export LC_ALL="${LC_ALL:-en_US.UTF-8}"
 
+# OTEL env whitelist (populated after readiness wait below)
+OTEL_ENV_ARGS=()
+OTEL_ALLOWED_KEYS="CLAUDE_CODE_ENABLE_TELEMETRY OTEL_METRICS_EXPORTER OTEL_LOGS_EXPORTER OTEL_EXPORTER_OTLP_PROTOCOL OTEL_EXPORTER_OTLP_ENDPOINT OTEL_EXPORTER_OTLP_HEADERS OTEL_LOG_USER_PROMPTS OTEL_LOG_TOOL_DETAILS OTEL_RESOURCE_ATTRIBUTES"
+
 # Helper to run commands as claude user with standard environment
 run_as_claude() {
   sudo -u claude \
@@ -17,6 +21,7 @@ run_as_claude() {
     CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
     LANG="$LANG" \
     LC_ALL="$LC_ALL" \
+    "${OTEL_ENV_ARGS[@]}" \
     "$@"
 }
 
@@ -73,6 +78,16 @@ if [[ ! -f /tmp/claudetainer-ready ]]; then
   echo "WARNING: Timed out waiting for readiness (60s). Starting anyway."
 fi
 
+# Build OTEL env array after readiness (entrypoint writes otel-env before ready marker)
+if [[ -f /tmp/otel/otel-env ]] && [[ ! -L /tmp/otel/otel-env ]]; then
+  while IFS='=' read -r key value; do
+    [[ -z "$key" ]] && continue
+    if [[ " $OTEL_ALLOWED_KEYS " == *" $key "* ]]; then
+      OTEL_ENV_ARGS+=("$key=$value")
+    fi
+  done < /tmp/otel/otel-env
+fi
+
 # Determine working directory (after readiness — repo may have just been cloned)
 WORK_DIR="/workspace"
 if [[ -d /workspace/repo ]]; then
@@ -103,6 +118,7 @@ sudo -u claude \
   COLORTERM="truecolor" \
   LANG="$LANG" \
   LC_ALL="$LC_ALL" \
+  "${OTEL_ENV_ARGS[@]}" \
   tmux -f /tmp/.tmux.conf new-session -d -s claude \
     -c "$WORK_DIR" \
     "claude --dangerously-skip-permissions"
@@ -115,6 +131,7 @@ sudo -u claude \
   COLORTERM="truecolor" \
   LANG="$LANG" \
   LC_ALL="$LC_ALL" \
+  "${OTEL_ENV_ARGS[@]}" \
   tmux -S "$TMUX_SOCKET" split-window -t claude -v -l 20% -c "$WORK_DIR" "bash --login -i"
 
 # Select the Claude Code pane (top) so it's focused on attach

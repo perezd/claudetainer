@@ -83,6 +83,8 @@ describe("Tier 1: hard-block", () => {
     'printf "$CLAUDE_CODE_OAUTH_TOKEN"',
     "echo $FLY_ACCESS_TOKEN",
     "echo ${FLY_API_TOKEN}",
+    "echo $GRAFANA_API_TOKEN",
+    "echo ${GRAFANA_INSTANCE_ID}",
   ];
 
   for (const cmd of blocked) {
@@ -149,6 +151,9 @@ describe("Tier 2: hot-word scan", () => {
     'python3 -c "print(GH_PAT)"',
     "echo 'check CLAUDE_CODE_OAUTH_TOKEN value'",
     "echo FLY_ACCESS_TOKEN",
+    "echo GRAFANA_API_TOKEN",
+    "echo GRAFANA_INSTANCE_ID",
+    "echo OTEL_EXPORTER_OTLP_HEADERS",
   ];
 
   for (const cmd of escalated) {
