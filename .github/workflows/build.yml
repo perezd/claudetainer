@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - '*.md'
+      - '!CLAUDE.md'
       - 'LICENSE'
       - '.github/**'
       - '.claude/**'
