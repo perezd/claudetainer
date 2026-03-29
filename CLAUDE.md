@@ -191,3 +191,34 @@ These superpowers skills are mandatory process gates — not optional.
 **Workflow order:** `/brainstorming` → `/writing-plans` → `/executing-plans` → `/verification-before-completion` → `/requesting-code-review` or `/finishing-a-development-branch`.
 
 `/systematic-debugging` and `/receiving-code-review` are reactive — invoke when their triggers occur at any point.
+
+---
+
+## Issue-Driven Workflow
+
+When Claude is explicitly given a GitHub issue URL or reference (e.g., `#24`, `owner/repo#24`, or a full URL), the following workflow overrides apply. Do not infer an originating issue from branch names, commit messages, or other indirect context — activation requires an explicit reference.
+
+### Artifact Routing
+
+All design specs and implementation plans produced by the brainstorming and writing-plans skills are posted as **comments on the originating GitHub issue** instead of being written to local files. No spec or plan files are created in `docs/`. The same skills run in the same order with the same rigor — only the output destination changes.
+
+### Comment Sequence
+
+The issue accumulates comments in this order:
+
+1. **Design comment** — The full panel review process (see Modification Protocol) **must complete with all experts signing off before this comment is posted**. Run multiple rounds if needed until the panel approves without concerns. The design comment must represent a vetted consensus, not a draft. Once posted, it is a stable artifact and should not need frequent updates.
+2. **Implementation plan comment** — Uses Markdown checkboxes (`- [ ]` / `- [x]`). As tasks are completed during execution, Claude edits this comment via `gh api` to mark items done, providing real-time progress visibility on the issue.
+3. **Supplemental comments** (only if needed) — If significant design issues are discovered during execution, post a new comment explaining what deviated and why. The original design comment is preserved as a historical record; deviations are made explicit rather than silently rewritten.
+4. **After-Action Report (AAR)** — Posted after all associated PRs are merged to main. This is the final action taken on the issue. Required sections:
+   - What went well?
+   - What went wrong?
+   - What was learned?
+   - What should happen differently next time?
+
+### PR Linkage
+
+PR bodies must include `Closes #N` (or equivalent GitHub closing keyword) so the issue is automatically closed when the PR merges to main.
+
+### CLI Best Practices
+
+When using `gh` commands that accept a body (e.g., `gh issue comment`, `gh pr create`), prefer `--body-file` with a temporary file over inline `--body` strings. Inline bodies with embedded code blocks or special characters can trigger the command approval classifier unnecessarily.
