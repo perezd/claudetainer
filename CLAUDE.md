@@ -48,6 +48,8 @@ Select relevant flex specialists based on the nature of the change.
 
 **Process:**
 
+NOTE: Each expert MUST run as a separate subagent with a clear context, with the proposal provided to them.
+
 1. Each expert evaluates the change from their perspective.
 2. Findings are ranked by severity: critical / high / medium / low.
 3. Each delivers a verdict: **approve**, **approve-with-conditions**, or **request-changes**.
