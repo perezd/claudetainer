@@ -106,8 +106,8 @@ else
   echo "WARNING: Failed to add marketplace — skipping plugin install" >&2
 fi
 
-# --- Restore stdout/stderr before tmux (no terminal when running from entrypoint) ---
-exec 1>/dev/null 2>&1
+# --- Redirect to log file before tmux (tee process substitution would interfere with TUI) ---
+exec 1>>"$START_LOG" 2>&1
 
 # --- Build claude command (with prompt if available) ---
 # Write a launcher script to handle prompt delivery safely. The prompt may contain

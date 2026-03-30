@@ -23,8 +23,8 @@ echo "Waiting for Claude to initialize..."
 
 TAIL_PID=""
 
-# Start tailing the log for progress visibility; retry if log not yet created
-while true; do
+# Start tailing the log for progress visibility; retry if log not yet created (60s timeout)
+for i in $(seq 1 60); do
   if [[ -f "$START_LOG" ]]; then
     tail -f "$START_LOG" &
     TAIL_PID=$!
