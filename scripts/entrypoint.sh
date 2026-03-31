@@ -224,13 +224,23 @@ fi
 # via .git/config edits, ~/.gitconfig, GIT_CONFIG_* env vars, or include
 # directives.
 if [[ -d /workspace/repo/.git ]]; then
-  mkdir -p /tmp/approval
-  git -C /workspace/repo remote | while read -r name; do
-    git -C /workspace/repo remote get-url "$name" 2>/dev/null
-  done > /tmp/approval/git-remote-urls.txt
-  chmod 444 /tmp/approval/git-remote-urls.txt
-  chmod 555 /tmp/approval
-  echo "[ENTRYPOINT] Git remote snapshot created at /tmp/approval/git-remote-urls.txt"
+  (
+    # Fail-open: snapshot errors must not abort the entrypoint. The approval
+    # layer handles a missing snapshot gracefully (contextual exemption simply
+    # won't activate, falling through to Haiku classification).
+    set +e
+    mkdir -p /tmp/approval
+    git -C /workspace/repo remote | while read -r name; do
+      git -C /workspace/repo remote get-url "$name" 2>/dev/null
+    done > /tmp/approval/git-remote-urls.txt
+    if [[ $? -ne 0 ]]; then
+      echo "[ENTRYPOINT] WARNING: Failed to snapshot git remotes; continuing without snapshot" >&2
+    else
+      chmod 444 /tmp/approval/git-remote-urls.txt
+      chmod 555 /tmp/approval
+      echo "[ENTRYPOINT] Git remote snapshot created at /tmp/approval/git-remote-urls.txt"
+    fi
+  ) || true
 fi
 
 # Give repo ownership to claude
