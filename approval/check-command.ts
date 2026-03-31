@@ -18,8 +18,9 @@ export function evaluateTiers(command: string, rules: Rules): TierResult {
     }
   }
 
-  // Tier 2: Hot-word scan
-  const matchedHotWord = rules.hotWords.find((hw) => command.includes(hw));
+  // Tier 2: Hot-word scan (normalize whitespace to prevent bypass via extra spaces/tabs/newlines)
+  const normalized = command.replace(/\s+/g, " ").trim();
+  const matchedHotWord = rules.hotWords.find((hw) => normalized.includes(hw));
   if (matchedHotWord) {
     return { decision: "escalate", hotWord: matchedHotWord };
   }

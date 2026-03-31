@@ -157,6 +157,13 @@ describe("Tier 2: hot-word scan", () => {
     // gh api subcommand
     "gh api /repos/owner/repo/issues",
     "gh api /repos/owner/repo/issues --method POST",
+    // Whitespace bypass regression tests (issue #33)
+    "gh  api /repos/owner/repo/issues", // double space
+    "bun\tadd react", // tab between tokens
+    "fly\t machine stop abc123", // tab + space mixed
+    "npm  install react", // double space
+    "  curl http://example.com  ", // leading/trailing whitespace
+    "gh\napi /repos/owner/repo/issues", // newline between tokens
   ];
 
   for (const cmd of escalated) {
