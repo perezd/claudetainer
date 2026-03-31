@@ -88,6 +88,56 @@ export function extractGitHubOwner(url: string): string | null {
   return null;
 }
 
+// --- Contextual GitHub command helpers (exported for testing) ---
+
+export interface RepoTarget {
+  owner: string;
+  repo: string;
+}
+
+const SAFE_NAME_RE = /^[a-zA-Z0-9._-]+$/;
+
+const GH_API_RE = /^gh\s+api\s+/;
+
+/**
+ * Extract the target owner/repo from a `gh api repos/<owner>/<repo>/...` command.
+ * Returns null if:
+ *   - the command is not a `gh api` call
+ *   - the API path doesn't start with [/]repos/<owner>/<repo>
+ *   - the path contains traversal (..), encoding (%), or double slashes (//)
+ *   - owner or repo contain characters outside [a-zA-Z0-9._-]
+ */
+export function parseGhApiTarget(command: string): RepoTarget | null {
+  if (!GH_API_RE.test(command)) return null;
+
+  // Extract the API path (first positional arg after "gh api")
+  const afterGhApi = command.replace(GH_API_RE, "").trim();
+  const tokens = afterGhApi.split(/\s+/);
+  // Find first token that doesn't start with - (skip flags like --jq)
+  const pathToken = tokens.find((t) => !t.startsWith("-"));
+  if (!pathToken) return null;
+
+  // Validate: no traversal, encoding, or double slashes
+  if (
+    pathToken.includes("..") ||
+    pathToken.includes("%") ||
+    pathToken.includes("//")
+  ) {
+    return null;
+  }
+
+  // Match repos/<owner>/<repo> with optional leading slash
+  const match = pathToken.match(/^\/?repos\/([^/]+)\/([^/]+)/);
+  if (!match) return null;
+
+  const [, owner, repo] = match;
+
+  // Validate owner and repo are safe names
+  if (!SAFE_NAME_RE.test(owner) || !SAFE_NAME_RE.test(repo)) return null;
+
+  return { owner, repo };
+}
+
 const HAS_DELETE_FLAG = /\s--delete\b|\s-[a-zA-Z]*d/;
 
 /**
