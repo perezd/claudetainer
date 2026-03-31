@@ -222,7 +222,8 @@ fi
 # avoiding git's safe.directory check. The snapshot is stored in a root-owned
 # directory that claude cannot modify, eliminating runtime remote injection
 # via .git/config edits, ~/.gitconfig, GIT_CONFIG_* env vars, or include
-# directives.
+# directives. URLs are sanitized to strip any embedded credentials (userinfo)
+# before writing, since the snapshot file is world-readable (mode 444).
 if [[ -d /workspace/repo/.git ]]; then
   (
     # Fail-open: snapshot errors must not abort the entrypoint. The approval
@@ -233,7 +234,7 @@ if [[ -d /workspace/repo/.git ]]; then
     tmp_snapshot="/tmp/approval/git-remote-urls.txt.$$"
     git -C /workspace/repo remote | while read -r name; do
       git -C /workspace/repo remote get-url "$name" 2>/dev/null
-    done > "$tmp_snapshot"
+    done | sed -E 's#(https?://)[^/@]*@#\1#g' > "$tmp_snapshot"
     if [[ $? -ne 0 ]]; then
       rm -f "$tmp_snapshot" /tmp/approval/git-remote-urls.txt
       echo "[ENTRYPOINT] WARNING: Failed to snapshot git remotes; continuing without snapshot" >&2
