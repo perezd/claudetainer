@@ -52,7 +52,7 @@ Each entry includes: risk title, affected layer(s), why it can't be resolved, co
 - **Affected layer:** Command Approval
 - **Description:** The contextual gh command exemption allows POST and PATCH API calls to repos matching configured git remotes without Haiku LLM classification. This means the agent can create issues, post comments, update content, and create PRs on related repos without a human checkpoint.
 - **Why it can't be resolved:** The core workflow requires posting design comments, updating implementation plans, and creating PRs on the upstream repo. Requiring Haiku review for every such operation defeats the purpose of the exemption.
-- **Compensating controls:** Only repos matching configured git remotes are eligible (immutable at runtime due to Tier 1 blocks on `git remote`). DELETE and PUT methods still require Haiku review. `GH_PAT` scope should be limited to minimum necessary permissions (`repo` scope). Network isolation limits reachable endpoints. All exempted commands are logged with the matched remote and owner/repo.
+- **Compensating controls:** Only repos matching configured git remotes are eligible (immutable at runtime due to Tier 1 blocks on `git remote`). DELETE and PUT methods still require Haiku review. `GH_PAT` scope should be limited to minimum necessary permissions (`repo` scope). Network isolation limits reachable endpoints. All exempted commands are logged with the full command string for post-incident analysis.
 - **Severity:** Low
 - **Date identified:** 2026-03-31 (identified during panel review of #36)
 

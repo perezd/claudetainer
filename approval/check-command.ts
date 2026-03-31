@@ -110,11 +110,11 @@ const GH_API_RE = /^gh\s+api\s+/;
 export function parseGhApiTarget(command: string): RepoTarget | null {
   if (!GH_API_RE.test(command)) return null;
 
-  // Extract the API path (first positional arg after "gh api")
+  // Extract the API path (first positional arg matching repos/ after "gh api")
   const afterGhApi = command.replace(GH_API_RE, "").trim();
   const tokens = afterGhApi.split(/\s+/);
-  // Find first token that doesn't start with - (skip flags like --jq)
-  const pathToken = tokens.find((t) => !t.startsWith("-"));
+  // Find first token that looks like an API path (skip flags and their values)
+  const pathToken = tokens.find((t) => /^\/?repos\//.test(t));
   if (!pathToken) return null;
 
   // Validate: no traversal, encoding, or double slashes

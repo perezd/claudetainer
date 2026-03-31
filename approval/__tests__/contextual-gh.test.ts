@@ -32,6 +32,28 @@ describe("parseGhApiTarget", () => {
     ).toEqual({ owner: "perezd", repo: "claudetainer" });
   });
 
+  test("handles flags before the path (-X PATCH)", () => {
+    expect(
+      parseGhApiTarget(
+        "gh api -X PATCH repos/perezd/claudetainer/issues/comments/123",
+      ),
+    ).toEqual({ owner: "perezd", repo: "claudetainer" });
+  });
+
+  test("handles --method flag before the path", () => {
+    expect(
+      parseGhApiTarget("gh api --method POST repos/perezd/claudetainer/pulls"),
+    ).toEqual({ owner: "perezd", repo: "claudetainer" });
+  });
+
+  test("handles multiple flags before the path", () => {
+    expect(
+      parseGhApiTarget(
+        'gh api -H "Accept: application/json" -X PATCH repos/o/r/issues/1',
+      ),
+    ).toEqual({ owner: "o", repo: "r" });
+  });
+
   test("returns null for gh api /user (no repo path)", () => {
     expect(parseGhApiTarget("gh api /user")).toBeNull();
   });
