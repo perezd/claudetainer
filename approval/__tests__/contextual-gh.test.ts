@@ -6,6 +6,7 @@ import {
   hasCompoundOperators,
   extractGitHubRepo,
   getRelatedRepos,
+  isContextualGhCommand,
 } from "../check-command";
 
 describe("parseGhApiTarget", () => {
@@ -357,5 +358,191 @@ describe("getRelatedRepos", () => {
     );
     const repos = await getRelatedRepos();
     expect(repos).toEqual([]);
+  });
+});
+
+describe("isContextualGhCommand", () => {
+  let originalSpawn: typeof Bun.spawn;
+
+  beforeEach(() => {
+    originalSpawn = Bun.spawn;
+  });
+
+  afterEach(() => {
+    Bun.spawn = originalSpawn;
+  });
+
+  function mockRelatedRepos(repos: Array<{ remote: string; url: string }>) {
+    const remoteList = repos.map((r) => r.remote).join("\n") + "\n";
+    const urlMap = new Map<string, string>();
+    for (const r of repos) {
+      urlMap.set(r.remote, r.url);
+    }
+
+    // @ts-expect-error — partial mock of Bun.spawn for testing
+    Bun.spawn = (args: string[]) => {
+      const key = args.join(" ");
+      let stdout = "";
+      let exitCode = 0;
+
+      if (key === "git -C /workspace/repo remote") {
+        stdout = remoteList;
+      } else if (key.startsWith("git -C /workspace/repo remote get-url ")) {
+        const remote = args[args.length - 1];
+        stdout = (urlMap.get(remote) ?? "") + "\n";
+        exitCode = urlMap.has(remote) ? 0 : 1;
+      } else {
+        exitCode = 1;
+      }
+
+      return {
+        stdout: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(stdout));
+            controller.close();
+          },
+        }),
+        stderr: new ReadableStream({
+          start(controller) {
+            controller.close();
+          },
+        }),
+        exited: Promise.resolve(exitCode),
+      };
+    };
+  }
+
+  const standardRemotes = [
+    {
+      remote: "origin",
+      url: "https://github.com/limbibot/claudetainer.git",
+    },
+    {
+      remote: "upstream",
+      url: "https://github.com/perezd/claudetainer.git",
+    },
+  ];
+
+  test("allows gh api targeting upstream repo", async () => {
+    mockRelatedRepos(standardRemotes);
+    expect(
+      await isContextualGhCommand(
+        "gh api repos/perezd/claudetainer/issues/comments/123 -X PATCH --input /tmp/body.md",
+      ),
+    ).toBe(true);
+  });
+
+  test("allows gh api targeting origin repo", async () => {
+    mockRelatedRepos(standardRemotes);
+    expect(
+      await isContextualGhCommand("gh api repos/limbibot/claudetainer/issues"),
+    ).toBe(true);
+  });
+
+  test("allows gh pr with --repo targeting upstream", async () => {
+    mockRelatedRepos(standardRemotes);
+    expect(
+      await isContextualGhCommand(
+        "gh pr create --repo perezd/claudetainer --title test",
+      ),
+    ).toBe(true);
+  });
+
+  test("allows gh issue with -R targeting upstream", async () => {
+    mockRelatedRepos(standardRemotes);
+    expect(
+      await isContextualGhCommand(
+        "gh issue comment 36 -R perezd/claudetainer --body-file /tmp/comment.md",
+      ),
+    ).toBe(true);
+  });
+
+  test("rejects gh api targeting unrelated repo", async () => {
+    mockRelatedRepos(standardRemotes);
+    expect(
+      await isContextualGhCommand("gh api repos/evil-org/evil-repo/issues"),
+    ).toBe(false);
+  });
+
+  test("rejects gh api with DELETE method", async () => {
+    mockRelatedRepos(standardRemotes);
+    expect(
+      await isContextualGhCommand(
+        "gh api repos/perezd/claudetainer/issues/1 -X DELETE",
+      ),
+    ).toBe(false);
+  });
+
+  test("rejects gh api with PUT method", async () => {
+    mockRelatedRepos(standardRemotes);
+    expect(
+      await isContextualGhCommand(
+        "gh api repos/perezd/claudetainer/contents/file -X PUT",
+      ),
+    ).toBe(false);
+  });
+
+  test("rejects compound commands with pipe", async () => {
+    mockRelatedRepos(standardRemotes);
+    expect(
+      await isContextualGhCommand(
+        "gh api repos/perezd/claudetainer/issues | head -5",
+      ),
+    ).toBe(false);
+  });
+
+  test("rejects compound commands with &&", async () => {
+    mockRelatedRepos(standardRemotes);
+    expect(
+      await isContextualGhCommand(
+        "gh api repos/perezd/claudetainer/issues && echo done",
+      ),
+    ).toBe(false);
+  });
+
+  test("rejects gh api with path traversal", async () => {
+    mockRelatedRepos(standardRemotes);
+    expect(
+      await isContextualGhCommand(
+        "gh api repos/perezd/claudetainer/../../evil/repo/contents",
+      ),
+    ).toBe(false);
+  });
+
+  test("case-insensitive owner matching", async () => {
+    mockRelatedRepos(standardRemotes);
+    expect(
+      await isContextualGhCommand("gh api repos/Perezd/Claudetainer/issues"),
+    ).toBe(true);
+  });
+
+  test("returns false for non-gh commands", async () => {
+    mockRelatedRepos(standardRemotes);
+    expect(await isContextualGhCommand("git status")).toBe(false);
+  });
+
+  test("returns false for gh api with no repo path", async () => {
+    mockRelatedRepos(standardRemotes);
+    expect(await isContextualGhCommand("gh api /user")).toBe(false);
+  });
+
+  test("returns false when git remote fails", async () => {
+    // @ts-expect-error — partial mock
+    Bun.spawn = () => ({
+      stdout: new ReadableStream({
+        start(c) {
+          c.close();
+        },
+      }),
+      stderr: new ReadableStream({
+        start(c) {
+          c.close();
+        },
+      }),
+      exited: Promise.resolve(128),
+    });
+    expect(
+      await isContextualGhCommand("gh api repos/perezd/claudetainer/issues"),
+    ).toBe(false);
   });
 });

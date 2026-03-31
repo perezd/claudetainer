@@ -265,6 +265,36 @@ export async function getRelatedRepos(): Promise<RepoTarget[]> {
   }
 }
 
+/**
+ * Check if a gh command targets a repo associated with configured git remotes.
+ * Returns true if the command should be exempted from Haiku classification.
+ *
+ * Fail-safe: returns false on any error (missing git config, unparseable
+ * command, no matching remote, blocked method, compound operators).
+ */
+export async function isContextualGhCommand(command: string): Promise<boolean> {
+  // Reject compound commands — they must go through Haiku
+  if (hasCompoundOperators(command)) return false;
+
+  // Reject blocked HTTP methods (DELETE, PUT)
+  if (hasBlockedMethod(command)) return false;
+
+  // Parse target repo from the command
+  const target = parseGhApiTarget(command) ?? parseGhRepoFlag(command);
+  if (!target) return false;
+
+  // Resolve related repos from git remotes
+  const relatedRepos = await getRelatedRepos();
+  if (relatedRepos.length === 0) return false;
+
+  // Check if target matches any related repo (case-insensitive)
+  return relatedRepos.some(
+    (r) =>
+      r.owner.toLowerCase() === target.owner.toLowerCase() &&
+      r.repo.toLowerCase() === target.repo.toLowerCase(),
+  );
+}
+
 const HAS_DELETE_FLAG = /\s--delete\b|\s-[a-zA-Z]*d/;
 
 /**
@@ -374,6 +404,12 @@ if (isMainModule) {
           console.error(
             `[HOOK] Hot word "${tierResult.hotWord}" -> escalating to Haiku`,
           );
+          // Pre-Haiku: check if this is a contextual gh command
+          if (await isContextualGhCommand(command)) {
+            console.error(`[HOOK] ALLOW (contextual gh command): ${command}`);
+            outputDecision("allow");
+            process.exit(0);
+          }
           break; // fall through to Tier 3
       }
 
