@@ -533,4 +533,11 @@ describe("isContextualGhCommand", () => {
       await isContextualGhCommand("gh api repos/perezd/claudetainer/issues"),
     ).toBe(false);
   });
+
+  test("handles leading whitespace in command", async () => {
+    mockSnapshotUrls(standardUrls);
+    expect(
+      await isContextualGhCommand("  gh api repos/perezd/claudetainer/issues"),
+    ).toBe(true);
+  });
 });

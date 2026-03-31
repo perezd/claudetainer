@@ -281,14 +281,19 @@ export async function getRelatedRepos(): Promise<RepoTarget[]> {
  * command, no matching remote, blocked method, compound operators).
  */
 export async function isContextualGhCommand(command: string): Promise<boolean> {
+  // Normalize leading whitespace — Tier 2 trims before hot word matching
+  // but the raw command string is passed here, so parsers with ^-anchored
+  // regexes would miss commands with leading spaces.
+  const cmd = command.trimStart();
+
   // Reject compound commands — they must go through Haiku
-  if (hasCompoundOperators(command)) return false;
+  if (hasCompoundOperators(cmd)) return false;
 
   // Reject disallowed HTTP methods (anything outside GET/POST/PATCH allowlist)
-  if (hasBlockedMethod(command)) return false;
+  if (hasBlockedMethod(cmd)) return false;
 
   // Parse target repo from the command
-  const target = parseGhApiTarget(command) ?? parseGhRepoFlag(command);
+  const target = parseGhApiTarget(cmd) ?? parseGhRepoFlag(cmd);
   if (!target) return false;
 
   // Resolve related repos from git remotes
