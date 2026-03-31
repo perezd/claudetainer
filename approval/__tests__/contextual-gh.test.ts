@@ -7,6 +7,7 @@ import {
   extractGitHubRepo,
   getRelatedRepos,
   isContextualGhCommand,
+  REMOTE_URLS_PATH,
 } from "../check-command";
 
 describe("parseGhApiTarget", () => {
@@ -297,68 +298,30 @@ describe("extractGitHubRepo", () => {
 });
 
 describe("getRelatedRepos", () => {
-  let originalSpawn: typeof Bun.spawn;
-  let spawnCalls: string[][] = [];
+  let originalFile: typeof Bun.file;
 
   beforeEach(() => {
-    originalSpawn = Bun.spawn;
-    spawnCalls = [];
+    originalFile = Bun.file;
   });
 
   afterEach(() => {
-    Bun.spawn = originalSpawn;
+    Bun.file = originalFile;
   });
 
-  function mockSpawn(
-    responses: Map<string, { stdout: string; exitCode: number }>,
-  ) {
-    let callIndex = 0;
-    // @ts-expect-error — partial mock of Bun.spawn for testing
-    Bun.spawn = (args: string[]) => {
-      spawnCalls.push(args);
-      const key = args.join(" ");
-      const response = responses.get(key) ?? { stdout: "", exitCode: 1 };
-      return {
-        stdout: new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode(response.stdout));
-            controller.close();
-          },
-        }),
-        stderr: new ReadableStream({
-          start(controller) {
-            controller.close();
-          },
-        }),
-        exited: Promise.resolve(response.exitCode),
-      };
+  function mockSnapshotFile(content: string | null) {
+    // @ts-expect-error — partial mock of Bun.file for testing
+    Bun.file = (path: string) => {
+      if (path === REMOTE_URLS_PATH && content !== null) {
+        return { text: () => Promise.resolve(content) };
+      }
+      throw new Error(`File not found: ${path}`);
     };
   }
 
-  test("returns repos from origin and upstream remotes", async () => {
-    mockSpawn(
-      new Map([
-        [
-          "git -C /workspace/repo remote",
-          { stdout: "origin\nupstream\n", exitCode: 0 },
-        ],
-        [
-          "git -C /workspace/repo remote get-url origin",
-          {
-            stdout: "https://github.com/limbibot/claudetainer.git\n",
-            exitCode: 0,
-          },
-        ],
-        [
-          "git -C /workspace/repo remote get-url upstream",
-          {
-            stdout: "https://github.com/perezd/claudetainer.git\n",
-            exitCode: 0,
-          },
-        ],
-      ]),
+  test("returns repos from snapshot file", async () => {
+    mockSnapshotFile(
+      "https://github.com/limbibot/claudetainer.git\nhttps://github.com/perezd/claudetainer.git\n",
     );
-
     const repos = await getRelatedRepos();
     expect(repos).toEqual([
       { owner: "limbibot", repo: "claudetainer" },
@@ -366,107 +329,66 @@ describe("getRelatedRepos", () => {
     ]);
   });
 
-  test("returns empty array when git remote fails", async () => {
-    mockSpawn(
-      new Map([
-        ["git -C /workspace/repo remote", { stdout: "", exitCode: 128 }],
-      ]),
-    );
+  test("returns empty array when snapshot file missing", async () => {
+    mockSnapshotFile(null);
     expect(await getRelatedRepos()).toEqual([]);
   });
 
-  test("skips remotes with non-GitHub URLs", async () => {
-    mockSpawn(
-      new Map([
-        ["git -C /workspace/repo remote", { stdout: "origin\n", exitCode: 0 }],
-        [
-          "git -C /workspace/repo remote get-url origin",
-          {
-            stdout: "https://gitlab.com/owner/repo.git\n",
-            exitCode: 0,
-          },
-        ],
-      ]),
-    );
+  test("skips non-GitHub URLs", async () => {
+    mockSnapshotFile("https://gitlab.com/owner/repo.git\n");
     expect(await getRelatedRepos()).toEqual([]);
   });
 
-  test("caps at 5 remotes", async () => {
-    const remotes = "r1\nr2\nr3\nr4\nr5\nr6\n";
-    mockSpawn(
-      new Map([
-        ["git -C /workspace/repo remote", { stdout: remotes, exitCode: 0 }],
-      ]),
-    );
-    const repos = await getRelatedRepos();
-    expect(repos).toEqual([]);
+  test("caps at 5 URLs", async () => {
+    const urls = Array.from(
+      { length: 6 },
+      (_, i) => `https://github.com/owner/repo${i}.git`,
+    ).join("\n");
+    mockSnapshotFile(urls);
+    expect(await getRelatedRepos()).toEqual([]);
+  });
+
+  test("handles empty snapshot file", async () => {
+    mockSnapshotFile("");
+    expect(await getRelatedRepos()).toEqual([]);
   });
 });
 
 describe("isContextualGhCommand", () => {
-  let originalSpawn: typeof Bun.spawn;
+  let originalFile: typeof Bun.file;
 
   beforeEach(() => {
-    originalSpawn = Bun.spawn;
+    originalFile = Bun.file;
   });
 
   afterEach(() => {
-    Bun.spawn = originalSpawn;
+    Bun.file = originalFile;
   });
 
-  function mockRelatedRepos(repos: Array<{ remote: string; url: string }>) {
-    const remoteList = repos.map((r) => r.remote).join("\n") + "\n";
-    const urlMap = new Map<string, string>();
-    for (const r of repos) {
-      urlMap.set(r.remote, r.url);
-    }
-
-    // @ts-expect-error — partial mock of Bun.spawn for testing
-    Bun.spawn = (args: string[]) => {
-      const key = args.join(" ");
-      let stdout = "";
-      let exitCode = 0;
-
-      if (key === "git -C /workspace/repo remote") {
-        stdout = remoteList;
-      } else if (key.startsWith("git -C /workspace/repo remote get-url ")) {
-        const remote = args[args.length - 1];
-        stdout = (urlMap.get(remote) ?? "") + "\n";
-        exitCode = urlMap.has(remote) ? 0 : 1;
-      } else {
-        exitCode = 1;
+  function mockSnapshotUrls(urls: string[]) {
+    // @ts-expect-error — partial mock of Bun.file for testing
+    Bun.file = (path: string) => {
+      if (path === REMOTE_URLS_PATH) {
+        return { text: () => Promise.resolve(urls.join("\n") + "\n") };
       }
-
-      return {
-        stdout: new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode(stdout));
-            controller.close();
-          },
-        }),
-        stderr: new ReadableStream({
-          start(controller) {
-            controller.close();
-          },
-        }),
-        exited: Promise.resolve(exitCode),
-      };
+      throw new Error(`File not found: ${path}`);
     };
   }
 
-  const standardRemotes = [
-    {
-      remote: "origin",
-      url: "https://github.com/limbibot/claudetainer.git",
-    },
-    {
-      remote: "upstream",
-      url: "https://github.com/perezd/claudetainer.git",
-    },
+  function mockSnapshotMissing() {
+    // @ts-expect-error — partial mock of Bun.file for testing
+    Bun.file = () => {
+      throw new Error("File not found");
+    };
+  }
+
+  const standardUrls = [
+    "https://github.com/limbibot/claudetainer.git",
+    "https://github.com/perezd/claudetainer.git",
   ];
 
   test("allows gh api targeting upstream repo", async () => {
-    mockRelatedRepos(standardRemotes);
+    mockSnapshotUrls(standardUrls);
     expect(
       await isContextualGhCommand(
         "gh api repos/perezd/claudetainer/issues/comments/123 -X PATCH --input /tmp/body.md",
@@ -475,14 +397,14 @@ describe("isContextualGhCommand", () => {
   });
 
   test("allows gh api targeting origin repo", async () => {
-    mockRelatedRepos(standardRemotes);
+    mockSnapshotUrls(standardUrls);
     expect(
       await isContextualGhCommand("gh api repos/limbibot/claudetainer/issues"),
     ).toBe(true);
   });
 
   test("allows gh pr with --repo targeting upstream", async () => {
-    mockRelatedRepos(standardRemotes);
+    mockSnapshotUrls(standardUrls);
     expect(
       await isContextualGhCommand(
         "gh pr create --repo perezd/claudetainer --title test",
@@ -491,7 +413,7 @@ describe("isContextualGhCommand", () => {
   });
 
   test("allows gh issue with -R targeting upstream", async () => {
-    mockRelatedRepos(standardRemotes);
+    mockSnapshotUrls(standardUrls);
     expect(
       await isContextualGhCommand(
         "gh issue comment 36 -R perezd/claudetainer --body-file /tmp/comment.md",
@@ -500,14 +422,14 @@ describe("isContextualGhCommand", () => {
   });
 
   test("rejects gh api targeting unrelated repo", async () => {
-    mockRelatedRepos(standardRemotes);
+    mockSnapshotUrls(standardUrls);
     expect(
       await isContextualGhCommand("gh api repos/evil-org/evil-repo/issues"),
     ).toBe(false);
   });
 
   test("rejects gh api with DELETE method", async () => {
-    mockRelatedRepos(standardRemotes);
+    mockSnapshotUrls(standardUrls);
     expect(
       await isContextualGhCommand(
         "gh api repos/perezd/claudetainer/issues/1 -X DELETE",
@@ -516,7 +438,7 @@ describe("isContextualGhCommand", () => {
   });
 
   test("rejects gh api with PUT method", async () => {
-    mockRelatedRepos(standardRemotes);
+    mockSnapshotUrls(standardUrls);
     expect(
       await isContextualGhCommand(
         "gh api repos/perezd/claudetainer/contents/file -X PUT",
@@ -525,7 +447,7 @@ describe("isContextualGhCommand", () => {
   });
 
   test("rejects compound commands with pipe", async () => {
-    mockRelatedRepos(standardRemotes);
+    mockSnapshotUrls(standardUrls);
     expect(
       await isContextualGhCommand(
         "gh api repos/perezd/claudetainer/issues | head -5",
@@ -534,7 +456,7 @@ describe("isContextualGhCommand", () => {
   });
 
   test("rejects compound commands with &&", async () => {
-    mockRelatedRepos(standardRemotes);
+    mockSnapshotUrls(standardUrls);
     expect(
       await isContextualGhCommand(
         "gh api repos/perezd/claudetainer/issues && echo done",
@@ -543,7 +465,7 @@ describe("isContextualGhCommand", () => {
   });
 
   test("rejects gh api with path traversal", async () => {
-    mockRelatedRepos(standardRemotes);
+    mockSnapshotUrls(standardUrls);
     expect(
       await isContextualGhCommand(
         "gh api repos/perezd/claudetainer/../../evil/repo/contents",
@@ -552,37 +474,24 @@ describe("isContextualGhCommand", () => {
   });
 
   test("case-insensitive owner matching", async () => {
-    mockRelatedRepos(standardRemotes);
+    mockSnapshotUrls(standardUrls);
     expect(
       await isContextualGhCommand("gh api repos/Perezd/Claudetainer/issues"),
     ).toBe(true);
   });
 
   test("returns false for non-gh commands", async () => {
-    mockRelatedRepos(standardRemotes);
+    mockSnapshotUrls(standardUrls);
     expect(await isContextualGhCommand("git status")).toBe(false);
   });
 
   test("returns false for gh api with no repo path", async () => {
-    mockRelatedRepos(standardRemotes);
+    mockSnapshotUrls(standardUrls);
     expect(await isContextualGhCommand("gh api /user")).toBe(false);
   });
 
-  test("returns false when git remote fails", async () => {
-    // @ts-expect-error — partial mock
-    Bun.spawn = () => ({
-      stdout: new ReadableStream({
-        start(c) {
-          c.close();
-        },
-      }),
-      stderr: new ReadableStream({
-        start(c) {
-          c.close();
-        },
-      }),
-      exited: Promise.resolve(128),
-    });
+  test("returns false when snapshot file missing", async () => {
+    mockSnapshotMissing();
     expect(
       await isContextualGhCommand("gh api repos/perezd/claudetainer/issues"),
     ).toBe(false);

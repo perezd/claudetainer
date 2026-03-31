@@ -214,51 +214,33 @@ export function extractGitHubRepo(url: string): RepoTarget | null {
 }
 
 const MAX_REMOTES = 5;
-const WORKSPACE_ROOT = "/workspace/repo";
 
 /**
- * Get owner/repo for all configured git remotes in the workspace.
- * Pinned to /workspace/repo to prevent cwd manipulation.
- * Returns empty array on any error or if more than MAX_REMOTES exist.
+ * Path to the boot-time snapshot of git remote URLs.
+ * Created by entrypoint.sh (as root) in a root-owned directory before claude
+ * starts. Reading from this snapshot instead of live git state eliminates
+ * runtime remote injection via .git/config edits, ~/.gitconfig, GIT_CONFIG_*
+ * env vars, or include directives.
+ */
+export const REMOTE_URLS_PATH = "/tmp/approval/git-remote-urls.txt";
+
+/**
+ * Get owner/repo for all git remotes from the boot-time snapshot.
+ * Returns empty array on any error or if more than MAX_REMOTES URLs exist.
  */
 export async function getRelatedRepos(): Promise<RepoTarget[]> {
   try {
-    const remoteProc = Bun.spawn(["git", "-C", WORKSPACE_ROOT, "remote"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const file = Bun.file(REMOTE_URLS_PATH);
+    const content = await file.text();
+    const urls = content.trim().split("\n").filter(Boolean);
 
-    const [remoteStdout, , remoteExitCode] = await Promise.all([
-      new Response(remoteProc.stdout).text(),
-      new Response(remoteProc.stderr).text(),
-      remoteProc.exited,
-    ]);
-
-    if (remoteExitCode !== 0) return [];
-
-    const remotes = remoteStdout.trim().split("\n").filter(Boolean);
-    if (remotes.length === 0 || remotes.length > MAX_REMOTES) return [];
+    if (urls.length === 0 || urls.length > MAX_REMOTES) return [];
 
     const repos: RepoTarget[] = [];
-
-    for (const remote of remotes) {
-      const urlProc = Bun.spawn(
-        ["git", "-C", WORKSPACE_ROOT, "remote", "get-url", remote],
-        { stdout: "pipe", stderr: "pipe" },
-      );
-
-      const [urlStdout, , urlExitCode] = await Promise.all([
-        new Response(urlProc.stdout).text(),
-        new Response(urlProc.stderr).text(),
-        urlProc.exited,
-      ]);
-
-      if (urlExitCode !== 0) continue;
-
-      const repoTarget = extractGitHubRepo(urlStdout.trim());
-      if (repoTarget) repos.push(repoTarget);
+    for (const url of urls) {
+      const repo = extractGitHubRepo(url.trim());
+      if (repo) repos.push(repo);
     }
-
     return repos;
   } catch {
     return [];

@@ -213,10 +213,25 @@ echo "[ENTRYPOINT] Root filesystem locked (read-only)"
 # === 6. Clone repo (optional) ===
 if [[ -n "${REPO_URL:-}" ]]; then
   echo "[ENTRYPOINT] Cloning $REPO_URL..."
-  # Clone as root (has access to git credentials), then give full ownership to claude
+  # Clone as root (has access to git credentials), then give full ownership to claude.
   git clone "$REPO_URL" /workspace/repo && \
     chown -R claude:claude /workspace/repo || \
     echo "[ENTRYPOINT] WARNING: Failed to clone $REPO_URL" >&2
+fi
+
+# Snapshot git remote URLs for the approval pipeline's contextual exemption.
+# This runs as root before claude starts, so the output is a trustworthy anchor.
+# The snapshot is stored in a root-owned directory that claude cannot modify,
+# eliminating runtime remote injection via .git/config edits, ~/.gitconfig,
+# GIT_CONFIG_* env vars, or include directives.
+if [[ -d /workspace/repo/.git ]]; then
+  mkdir -p /tmp/approval
+  git -C /workspace/repo remote | while read -r name; do
+    git -C /workspace/repo remote get-url "$name" 2>/dev/null
+  done > /tmp/approval/git-remote-urls.txt
+  chmod 444 /tmp/approval/git-remote-urls.txt
+  chmod 555 /tmp/approval
+  echo "[ENTRYPOINT] Git remote snapshot created at /tmp/approval/git-remote-urls.txt"
 fi
 
 # Pre-accept project trust for the workspace directory
