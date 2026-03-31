@@ -201,3 +201,38 @@ describe("Tier 2: hot-word scan", () => {
     });
   }
 });
+
+describe("Tier interaction: contextual gh exemption respects Tier 1", () => {
+  // These commands match Tier 1 blocks — they must be denied regardless
+  // of whether the repo is "related". The contextual exemption only runs
+  // after Tier 2, so Tier 1 denials are inviolable.
+  const tier1Blocked = [
+    "gh gist create repos/perezd/claudetainer/file.txt",
+    "gh repo delete perezd/claudetainer",
+    "gh repo create perezd/claudetainer-fork",
+    "gh auth logout",
+  ];
+
+  for (const cmd of tier1Blocked) {
+    test(`Tier 1 blocks before contextual exemption: ${cmd}`, () => {
+      const result = evaluateTiers(cmd, rules);
+      expect(result.decision).toBe("deny");
+    });
+  }
+
+  // These commands hit Tier 2 (hot word "gh api") and would be
+  // candidates for contextual exemption — verify they escalate
+  const tier2Escalated = [
+    "gh api repos/perezd/claudetainer/issues",
+    "gh api repos/unknown/repo/issues",
+    "gh api /repos/perezd/claudetainer/pulls",
+  ];
+
+  for (const cmd of tier2Escalated) {
+    test(`Tier 2 escalates gh api (contextual check runs after): ${cmd}`, () => {
+      const result = evaluateTiers(cmd, rules);
+      expect(result.decision).toBe("escalate");
+      expect((result as { hotWord: string }).hotWord).toBe("gh api");
+    });
+  }
+});
