@@ -239,6 +239,16 @@ describe("hasBlockedMethod", () => {
   test("blocks TRACE (not in allowlist)", () => {
     expect(hasBlockedMethod("gh api repos/o/r --method TRACE")).toBe(true);
   });
+  test("blocks when any method flag is disallowed (multiple flags)", () => {
+    expect(hasBlockedMethod("gh api repos/o/r -X GET --method DELETE")).toBe(
+      true,
+    );
+  });
+  test("allows when all method flags are in allowlist", () => {
+    expect(hasBlockedMethod("gh api repos/o/r -X POST --method PATCH")).toBe(
+      false,
+    );
+  });
 });
 
 describe("hasCompoundOperators", () => {

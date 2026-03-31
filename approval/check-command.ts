@@ -192,19 +192,20 @@ export function parseGhRepoFlag(command: string): RepoTarget | null {
   return { owner, repo };
 }
 
-const METHOD_RE = /(?:-X\s*|--method[\s=])([A-Za-z]+)/i;
+const METHOD_RE = /(?:-X\s*|--method[\s=])([A-Za-z]+)/gi;
 const ALLOWED_METHODS = new Set(["GET", "POST", "PATCH"]);
 
 /**
  * Check if a gh command uses a non-allowed HTTP method.
  * Allowlist: GET, POST, PATCH. No explicit method flag → treated as GET (allowed).
  * Any other explicit method (DELETE, PUT, OPTIONS, HEAD, TRACE, etc.) → blocked.
+ * Checks ALL method flags in the command — if any is outside the allowlist, blocked.
  * Case-insensitive. Handles -X, -XDELETE, --method, and --method=DELETE forms.
  */
 export function hasBlockedMethod(command: string): boolean {
-  const match = command.match(METHOD_RE);
-  if (!match) return false; // no explicit method → GET (allowed)
-  return !ALLOWED_METHODS.has(match[1].toUpperCase());
+  const matches = [...command.matchAll(METHOD_RE)];
+  if (matches.length === 0) return false; // no explicit method → GET (allowed)
+  return matches.some((m) => !ALLOWED_METHODS.has(m[1].toUpperCase()));
 }
 
 const COMPOUND_OPERATORS_RE = /[;&|`\n$()]/;
