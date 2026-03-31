@@ -167,6 +167,12 @@ describe("hasBlockedMethod", () => {
   test("allows --method POST", () => {
     expect(hasBlockedMethod("gh api repos/o/r --method POST")).toBe(false);
   });
+  test("blocks --method=DELETE (equals form)", () => {
+    expect(hasBlockedMethod("gh api repos/o/r --method=DELETE")).toBe(true);
+  });
+  test("blocks --method=PUT (equals form)", () => {
+    expect(hasBlockedMethod("gh api repos/o/r --method=PUT")).toBe(true);
+  });
 });
 
 describe("hasCompoundOperators", () => {
@@ -242,6 +248,20 @@ describe("extractGitHubRepo", () => {
     expect(extractGitHubRepo("git@github.com:perezd/claudetainer")).toEqual({
       owner: "perezd",
       repo: "claudetainer",
+    });
+  });
+
+  test("extracts owner/repo with dots in repo name (HTTPS)", () => {
+    expect(extractGitHubRepo("https://github.com/socketio/socket.io")).toEqual({
+      owner: "socketio",
+      repo: "socket.io",
+    });
+  });
+
+  test("extracts owner/repo with dots in repo name (SSH)", () => {
+    expect(extractGitHubRepo("git@github.com:vuejs/vue.js.git")).toEqual({
+      owner: "vuejs",
+      repo: "vue.js",
     });
   });
 

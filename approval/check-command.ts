@@ -171,7 +171,7 @@ export function parseGhRepoFlag(command: string): RepoTarget | null {
   return { owner, repo };
 }
 
-const BLOCKED_METHOD_RE = /(?:-X\s*|--method\s+)(DELETE|PUT)\b/i;
+const BLOCKED_METHOD_RE = /(?:-X\s*|--method[\s=])(DELETE|PUT)\b/i;
 
 /**
  * Check if a gh command uses a blocked HTTP method (DELETE or PUT).
@@ -200,13 +200,13 @@ export function hasCompoundOperators(command: string): boolean {
 export function extractGitHubRepo(url: string): RepoTarget | null {
   // HTTPS: https://github.com/<owner>/<repo>[.git]
   const httpsMatch = url.match(
-    /^https:\/\/github\.com\/([^/]+)\/([^/.\s]+?)(?:\.git)?\s*$/,
+    /^https:\/\/github\.com\/([^/]+)\/([^/\s]+?)(?:\.git)?\s*$/,
   );
   if (httpsMatch) return { owner: httpsMatch[1], repo: httpsMatch[2] };
 
   // SSH: git@github.com:<owner>/<repo>[.git]
   const sshMatch = url.match(
-    /^git@github\.com:([^/]+)\/([^/.\s]+?)(?:\.git)?\s*$/,
+    /^git@github\.com:([^/]+)\/([^/\s]+?)(?:\.git)?\s*$/,
   );
   if (sshMatch) return { owner: sshMatch[1], repo: sshMatch[2] };
 
