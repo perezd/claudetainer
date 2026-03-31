@@ -1,4 +1,4 @@
-import { SYSTEM_PROMPT } from "./system-prompt";
+import SYSTEM_PROMPT from "./system-prompt.txt" with { type: "text" };
 
 export type Verdict =
   | { verdict: "allow"; reason: string }
