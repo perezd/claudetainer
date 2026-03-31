@@ -171,14 +171,19 @@ export function parseGhRepoFlag(command: string): RepoTarget | null {
   return { owner, repo };
 }
 
-const BLOCKED_METHOD_RE = /(?:-X\s*|--method[\s=])(DELETE|PUT)\b/i;
+const METHOD_RE = /(?:-X\s*|--method[\s=])([A-Za-z]+)/i;
+const ALLOWED_METHODS = new Set(["GET", "POST", "PATCH"]);
 
 /**
- * Check if a gh command uses a blocked HTTP method (DELETE or PUT).
- * Case-insensitive. Handles both -X DELETE and -XDELETE forms.
+ * Check if a gh command uses a non-allowed HTTP method.
+ * Allowlist: GET, POST, PATCH. No explicit method flag → treated as GET (allowed).
+ * Any other explicit method (DELETE, PUT, OPTIONS, HEAD, TRACE, etc.) → blocked.
+ * Case-insensitive. Handles -X, -XDELETE, --method, and --method=DELETE forms.
  */
 export function hasBlockedMethod(command: string): boolean {
-  return BLOCKED_METHOD_RE.test(command);
+  const match = command.match(METHOD_RE);
+  if (!match) return false; // no explicit method → GET (allowed)
+  return !ALLOWED_METHODS.has(match[1].toUpperCase());
 }
 
 const COMPOUND_OPERATORS_RE = /[;&|`\n$()]/;

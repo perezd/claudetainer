@@ -196,6 +196,15 @@ describe("hasBlockedMethod", () => {
   test("blocks --method=PUT (equals form)", () => {
     expect(hasBlockedMethod("gh api repos/o/r --method=PUT")).toBe(true);
   });
+  test("blocks OPTIONS (not in allowlist)", () => {
+    expect(hasBlockedMethod("gh api repos/o/r -X OPTIONS")).toBe(true);
+  });
+  test("blocks HEAD (not in allowlist)", () => {
+    expect(hasBlockedMethod("gh api repos/o/r -X HEAD")).toBe(true);
+  });
+  test("blocks TRACE (not in allowlist)", () => {
+    expect(hasBlockedMethod("gh api repos/o/r --method TRACE")).toBe(true);
+  });
 });
 
 describe("hasCompoundOperators", () => {
