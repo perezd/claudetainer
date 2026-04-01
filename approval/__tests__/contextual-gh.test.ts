@@ -263,6 +263,26 @@ describe("parseGhRepoSyncTarget", () => {
     expect(result?.source).toBeNull();
   });
 
+  test("handles --source=owner/repo equals form", () => {
+    expect(
+      parseGhRepoSyncTarget(
+        "gh repo sync limbibot/claudetainer --source=perezd/claudetainer",
+      ),
+    ).toEqual({
+      target: { owner: "limbibot", repo: "claudetainer" },
+      source: { owner: "perezd", repo: "claudetainer" },
+    });
+  });
+
+  test("handles --branch=main equals form", () => {
+    expect(
+      parseGhRepoSyncTarget("gh repo sync limbibot/claudetainer --branch=main"),
+    ).toEqual({
+      target: { owner: "limbibot", repo: "claudetainer" },
+      source: null,
+    });
+  });
+
   test("allows dots, hyphens, underscores", () => {
     expect(parseGhRepoSyncTarget("gh repo sync my-org/my_repo.js")).toEqual({
       target: { owner: "my-org", repo: "my_repo.js" },

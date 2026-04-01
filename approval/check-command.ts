@@ -206,13 +206,41 @@ export function parseGhRepoSyncTarget(
   if (!GH_REPO_SYNC_RE.test(command)) return null;
 
   const afterSync = command.replace(/^gh\s+repo\s+sync\b/, "").trim();
-  const tokens = afterSync.split(/\s+/).filter(Boolean);
+  if (!afterSync) return { target: null, source: null };
+  const tokens = afterSync.split(/\s+/);
 
   let target: RepoTarget | null = null;
   let source: RepoTarget | null = null;
 
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
+
+    // Handle --source=<value> equals form
+    if (t.startsWith("--source=")) {
+      const value = t.slice("--source=".length);
+      if (value) {
+        const slashIdx = value.indexOf("/");
+        if (slashIdx !== -1) {
+          const owner = value.slice(0, slashIdx);
+          const repo = value.slice(slashIdx + 1);
+          if (
+            owner &&
+            repo &&
+            SAFE_NAME_RE.test(owner) &&
+            SAFE_NAME_RE.test(repo)
+          ) {
+            source = { owner, repo };
+          }
+        }
+      }
+      continue;
+    }
+
+    // Handle --branch=<value> and -b=<value> equals forms — skip them
+    if (t.startsWith("--branch=") || t.startsWith("-b=")) {
+      continue;
+    }
+
     if (GH_REPO_SYNC_VALUE_FLAGS.test(t)) {
       const value = tokens[++i];
       if (t === "--source" && value) {
@@ -341,6 +369,10 @@ export async function getRelatedRepos(): Promise<RepoTarget[]> {
   }
 }
 
+// NOTE: These hot words must also be present in rules.conf (Tier 2) to trigger
+// Tier 2 escalation in the first place. If a hot word is removed from rules.conf
+// but kept here (or vice versa), the contextual exemption gate will be silently
+// bypassed or this set will have dead entries. Keep both in sync.
 export const ALWAYS_ESCALATE_HOT_WORDS = new Set([
   "gh pr merge",
   "gh pr close",
