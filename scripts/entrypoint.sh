@@ -217,6 +217,34 @@ if [[ -n "${REPO_URL:-}" ]]; then
     echo "[ENTRYPOINT] WARNING: Failed to clone $REPO_URL" >&2
 fi
 
+# If cloned repo is a fork, add upstream remote pointing to parent.
+# This ensures the snapshot captures both origin and upstream URLs,
+# enabling the contextual exemption for commands targeting either repo.
+if [[ -d /workspace/repo/.git ]]; then
+  (
+    set +e
+    # Extract origin NWO from remote URL
+    origin_url=$(git -C /workspace/repo remote get-url origin 2>/dev/null)
+    repo_nwo=$(echo "$origin_url" | sed -E 's#.*/([^/]+/[^/.]+?)(\.git)?$#\1#')
+    if [[ -n "$repo_nwo" ]]; then
+      # Query GitHub API for fork parent (timeout prevents boot hang)
+      parent_nwo=$(timeout 10 gh repo view "$repo_nwo" --json isFork,parent \
+        --jq 'select(.isFork) | .parent.owner.login + "/" + .parent.name' \
+        2>/dev/null)
+      if [[ -n "$parent_nwo" ]]; then
+        upstream_url="https://github.com/${parent_nwo}.git"
+        # Validate URL matches strict GitHub HTTPS pattern
+        if [[ "$upstream_url" =~ ^https://github\.com/[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+\.git$ ]]; then
+          git -C /workspace/repo remote add upstream "$upstream_url" 2>/dev/null
+          echo "[ENTRYPOINT] Fork detected — added upstream remote: ${parent_nwo}"
+        else
+          echo "[ENTRYPOINT] WARNING: Invalid upstream URL format, skipping: ${upstream_url}" >&2
+        fi
+      fi
+    fi
+  ) || true
+fi
+
 # Snapshot git remote URLs for the approval pipeline's contextual exemption.
 # Runs as root while the repo is still root-owned (before chown to claude),
 # avoiding git's safe.directory check. The snapshot is stored in a root-owned
