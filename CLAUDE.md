@@ -234,7 +234,7 @@ These superpowers skills are mandatory process gates — not optional.
 
 When an explicit issue reference is active (see Issue-Driven Workflow), evaluate these overrides **before invoking any skill**. These take precedence over skill-default behaviors per the instruction priority chain (CLAUDE.md > skills > system prompt).
 
-1. **Bug triage order** — If the issue is a bug or regression (by label or description), invoke `/systematic-debugging` before `/brainstorming`. Do not skip this even if the fix seems obvious.
+1. **Bug triage order** — If the issue is a bug, regression, or report of unexpected behavior (by label or description), invoke `/systematic-debugging` before proceeding with `/brainstorming` and `/writing-plans`. Do not skip this even if the fix seems obvious.
 2. **Artifact routing** — Design specs and implementation plans are posted as comments on the originating issue, not written to local files. Skill defaults for file output paths (`docs/superpowers/specs/`, `docs/superpowers/plans/`) do not apply. See Issue-Driven Workflow § Artifact Routing.
 3. **Panel review gate** — The design comment must complete full panel review with all experts signing off before being posted to the issue. See Issue-Driven Workflow § Comment Sequence.
 
