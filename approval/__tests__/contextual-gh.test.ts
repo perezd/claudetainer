@@ -731,4 +731,11 @@ describe("isContextualGhCommand", () => {
       await isContextualGhCommand("gh repo sync --source perezd/claudetainer"),
     ).toBe(false);
   });
+
+  test("rejects gh repo sync with related target but no --source (unvalidatable)", async () => {
+    mockSnapshotUrls(standardUrls);
+    expect(
+      await isContextualGhCommand("gh repo sync limbibot/claudetainer"),
+    ).toBe(false);
+  });
 });

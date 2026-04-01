@@ -418,8 +418,13 @@ export async function isContextualGhCommand(command: string): Promise<boolean> {
   // Check if target matches any related repo (case-insensitive)
   if (!isRelated(target)) return false;
 
-  // For gh repo sync, also validate the --source repo is related
-  if (syncResult?.source && !isRelated(syncResult.source)) return false;
+  // For gh repo sync, require --source and validate it is related.
+  // Bare `gh repo sync` (no --source) lets GitHub infer the source,
+  // which we can't validate against the snapshot — send to Haiku.
+  if (syncResult) {
+    if (!syncResult.source) return false;
+    if (!isRelated(syncResult.source)) return false;
+  }
 
   return true;
 }

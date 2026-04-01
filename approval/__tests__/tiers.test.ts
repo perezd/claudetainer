@@ -88,6 +88,7 @@ describe("Tier 1: hard-block", () => {
     // gh repo sync --force (destructive sync)
     "gh repo sync limbibot/claudetainer --source perezd/claudetainer --force",
     "gh repo sync limbibot/claudetainer --force --source perezd/claudetainer",
+    "cd /workspace/repo && gh repo sync limbibot/claudetainer --force",
   ];
 
   for (const cmd of blocked) {
