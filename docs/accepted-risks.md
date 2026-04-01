@@ -33,29 +33,30 @@ Each entry includes: risk title, affected layer(s), why it can't be resolved, co
 - **Affected layer:** All three (Container Hardening, Network Isolation, Command Approval)
 - **Description:** When `CLAUDE_PROMPT` is set, Claude operates autonomously with full `GH_PAT` and `CLAUDE_CODE_OAUTH_TOKEN` access before a human connects via SSH. `--dangerously-skip-permissions` is active. The operator is expected to SSH in to observe — this is not a fully headless mode.
 - **Why it can't be resolved:** Immediate tasking at boot is the core value of the feature. Requiring SSH before Claude starts would defeat the purpose.
-- **Compensating controls:** Network isolation limits exfiltration targets. Command approval blocks dangerous commands. The `gh api` hot word ensures Haiku reviews GitHub API calls targeting repos not associated with configured git remotes. Contextual `gh api` commands (targeting repos matching the container's git remotes) are auto-allowed for GET/POST/PATCH methods; DELETE and PUT still require Haiku review. This contextual exemption cannot be expanded at runtime because the approval pipeline reads from a boot-time snapshot of git remote URLs (`/tmp/approval/git-remote-urls.txt`), created by the entrypoint as root in a root-owned directory (mode 555) before claude starts. Runtime modifications to `.git/config`, `~/.gitconfig`, or `GIT_CONFIG_*` environment variables have no effect on the snapshot. Users always SSH in to observe and interact. The prompt's SHA-256 hash is logged at boot for audit correlation.
+- **Compensating controls:** Network isolation limits exfiltration targets. Command approval blocks dangerous commands. Mutating `gh` commands (issue/PR creation, comments, edits, repo sync, and API POST/PATCH) targeting repos matching configured git remotes are auto-allowed; high-consequence operations (`gh pr merge`, `gh pr close`, `gh issue close`) and `gh api` DELETE/PUT always require Haiku review. This contextual exemption cannot be expanded at runtime because the approval pipeline reads from a boot-time snapshot of git remote URLs (`/tmp/approval/git-remote-urls.txt`), created by the entrypoint as root in a root-owned directory (mode 555) before claude starts. Runtime modifications to `.git/config`, `~/.gitconfig`, or `GIT_CONFIG_*` environment variables have no effect on the snapshot. Users always SSH in to observe and interact. The prompt's SHA-256 hash is logged at boot for audit correlation.
 - **Severity:** Medium
 - **Date identified:** 2026-03-30 (identified during panel review of #23)
-- **Last updated:** 2026-03-31 (updated for #36 contextual `gh api` command exemption)
+- **Last updated:** 2026-04-01 (updated for #51 broader contextual gh command exemption)
 
 ### Prompt injection via CLAUDE_PROMPT
 
 - **Affected layer:** Command Approval
 - **Description:** A crafted `CLAUDE_PROMPT` value could attempt to instruct Claude to bypass security controls or exfiltrate data within allowed network paths. The operator who sets `CLAUDE_PROMPT` has the same trust level as someone with `FLY_ACCESS_TOKEN` — they can already SSH in and direct the agent interactively.
 - **Why it can't be resolved:** Prompt validation or signing would add complexity without meaningful security benefit — the operator is already trusted at the same level as the env var they're setting.
-- **Compensating controls:** Network isolation, command approval (including `gh api` hot-wording for non-related repos, and contextual `gh api` exemption with method restrictions for related repos), and Claude Code's own safety training. Operator-as-adversary shares the same trust boundary as `FLY_ACCESS_TOKEN`.
+- **Compensating controls:** Network isolation, command approval (including hot-wording for mutating gh commands targeting non-related repos, contextual exemption for related repos with high-consequence operations always escalated to Haiku, and `gh repo sync --force` hard-blocked), and Claude Code's own safety training. Operator-as-adversary shares the same trust boundary as `FLY_ACCESS_TOKEN`.
 - **Severity:** Medium
 - **Date identified:** 2026-03-30 (identified during panel review of #23)
-- **Last updated:** 2026-03-31 (updated for #36 contextual `gh api` command exemption)
+- **Last updated:** 2026-04-01 (updated for #51 broader contextual gh command exemption)
 
-### POST/PATCH allowed to related repos without Haiku review
+### Mutating gh commands allowed to related repos without Haiku review
 
 - **Affected layer:** Command Approval
-- **Description:** The contextual `gh api` exemption allows POST and PATCH API calls to repos matching configured git remotes without Haiku LLM classification. This means the agent can create issues, post comments, update content, and create PRs on related repos without a human checkpoint.
-- **Why it can't be resolved:** The core workflow requires posting design comments, updating implementation plans, and creating PRs on the upstream repo. Requiring Haiku review for every such operation defeats the purpose of the exemption.
-- **Compensating controls:** Only repos matching the boot-time remote snapshot are eligible (immutable — snapshot is root-owned and created before claude starts). DELETE and PUT methods still require Haiku review. `GH_PAT` should follow least-privilege: prefer fine-grained PATs granting only the required permissions on specific repos; if classic PATs are used, `public_repo` suffices for public-only workflows and `repo` only when private-repo access is strictly required. Network isolation limits reachable endpoints. All exempted commands are logged with the full command string for post-incident analysis.
+- **Description:** The contextual gh command exemption auto-allows mutating operations (`gh issue comment`, `gh issue create`, `gh pr create`, `gh pr comment`, `gh pr edit`, `gh pr review`, `gh repo sync`, and `gh api` POST/PATCH) targeting repos matching configured git remotes — without Haiku LLM classification. High-consequence operations (`gh pr merge`, `gh pr close`, `gh issue close`) are excluded from this exemption and always reach Haiku. This means the agent can create issues, post comments, update content, create PRs, and sync forks on related repos without a human checkpoint.
+- **Why it can't be resolved:** The core workflow requires posting design comments, updating implementation plans, creating PRs, and syncing forks with upstream. Requiring Haiku review for every such operation defeats the purpose of the exemption.
+- **Compensating controls:** Only repos matching the boot-time remote snapshot are eligible (immutable — snapshot is root-owned, created in a mode-555 directory before claude starts). High-consequence operations (`gh pr merge`, `gh pr close`, `gh issue close`) always escalate to Haiku regardless of repo relationship. `gh repo sync --force` is Tier 1 hard-blocked. For `gh api`, DELETE and PUT methods still require Haiku review. `gh repo sync` validates both the target fork and `--source` repo against the snapshot. `GH_PAT` should follow least-privilege: prefer fine-grained PATs granting only the required permissions on specific repos; if classic PATs are used, `public_repo` suffices for public-only workflows and `repo` only when private-repo access is strictly required. Network isolation limits reachable endpoints. All exempted commands are logged with the full command string for post-incident analysis.
 - **Severity:** Low
 - **Date identified:** 2026-03-31 (identified during panel review of #36)
+- **Last updated:** 2026-04-01 (expanded scope from `gh api` POST/PATCH to all mutating gh subcommands per #51)
 
 ### CLAUDE_PROMPT visible via Fly Machines API
 
