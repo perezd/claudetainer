@@ -4,7 +4,9 @@
 # Fallback: If Claude Code strips env vars from a subprocess, read from
 # the root-owned token file via the targeted sudoers entry.
 if [[ -z "${GH_TOKEN:-}" ]] && [[ -f /opt/gh-config/.ghtoken ]]; then
-  GH_TOKEN=$(sudo -n /usr/bin/cat /opt/gh-config/.ghtoken 2>/dev/null) || true
-  export GH_TOKEN
+  if token_from_file=$(sudo -n /usr/bin/cat /opt/gh-config/.ghtoken 2>/dev/null) && [[ -n "${token_from_file}" ]]; then
+    GH_TOKEN="${token_from_file}"
+    export GH_TOKEN
+  fi
 fi
 exec /usr/bin/gh "$@"
