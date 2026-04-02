@@ -311,9 +311,10 @@ const SINGLE_QUOTE_PAIR_RE = /'[^']*'/g;
  *
  * Safety checks before stripping:
  * - Odd quote count (unmatched) → fail-closed to Haiku
- * - Token-embedded quotes (adjacent non-whitespace/non-= chars) → fail-closed
- *   Prevents repo-targeting bypass: repos/good'x'/repo strips to repos/good/repo
- *   but bash executes goodx/repo
+ * - Token-embedded quotes → fail-closed. Before opening quote: only whitespace
+ *   or = allowed (for --flag='value' forms). After closing quote: only whitespace
+ *   or end-of-string allowed. Prevents repo-targeting bypass where
+ *   repos/good'x'/repo strips to repos/good/repo but bash executes goodx/repo
  *
  * Double quotes are NOT stripped — they allow interpolation ($(), backticks),
  * so metacharacters inside double quotes remain legitimately dangerous.
