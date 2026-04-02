@@ -154,8 +154,10 @@ chmod 711 /opt/gh-config
 chmod 644 /opt/gh-config/* 2>/dev/null || true
 
 # Configure npm/bun auth for GitHub Packages
-cat > /home/claude/.npmrc <<NPMRC
-//npm.pkg.github.com/:_authToken=${GH_PAT}
+# Uses env var substitution — npm/bun expand ${VAR} at runtime from the process environment.
+# The file contains only the variable reference, not the plaintext token.
+cat > /home/claude/.npmrc <<'NPMRC'
+//npm.pkg.github.com/:_authToken=${CLAUDETAINER_NPM_TOKEN}
 NPMRC
 chown root:root /home/claude/.npmrc
 chmod 644 /home/claude/.npmrc
