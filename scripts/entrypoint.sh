@@ -140,18 +140,38 @@ git config --system url."https://github.com/".insteadOf "git@github.com:"
 # Authenticate gh CLI with the PAT
 echo "$GH_PAT" | gh auth login --with-token --hostname github.com 2>/dev/null || true
 
-# Configure git credential helper at system level so claude user can use it
-# gh auth setup-git only writes to ~/.gitconfig (root), so we set it explicitly
-# GH_CONFIG_DIR is hardcoded in the command so it works regardless of environment inheritance
-git config --system credential.https://github.com.helper '!GH_CONFIG_DIR=/opt/gh-config /usr/bin/gh auth git-credential'
+# Configure git credential helper at system level so claude user can use it.
+# Uses the wrapper at /usr/local/bin/gh which handles GH_TOKEN fallback.
+git config --system credential.https://github.com.helper '!/usr/local/bin/gh auth git-credential'
 
-# Copy gh config to a shared location readable by claude user
+# Write GH_PAT to a dedicated token file for the gh-wrapper fallback.
+# Mode 600 root:root — the claude user cannot read this directly.
+# The gh-wrapper reads it via a targeted sudoers entry when GH_TOKEN is not in the environment.
 mkdir -p /opt/gh-config
-if [[ -d /root/.config/gh ]]; then
-  cp -r /root/.config/gh/* /opt/gh-config/ 2>/dev/null || true
+echo "$GH_PAT" > /opt/gh-config/.ghtoken
+chown root:root /opt/gh-config/.ghtoken
+chmod 600 /opt/gh-config/.ghtoken
+
+# Lock down hosts.yml (written by gh auth login above) — contains the PAT
+if [[ -f /root/.config/gh/hosts.yml ]]; then
+  cp /root/.config/gh/hosts.yml /opt/gh-config/hosts.yml
+  chown root:root /opt/gh-config/hosts.yml
+  chmod 600 /opt/gh-config/hosts.yml
+fi
+# Copy non-sensitive config (git_protocol, editor, etc.)
+if [[ -f /root/.config/gh/config.yml ]]; then
+  cp /root/.config/gh/config.yml /opt/gh-config/config.yml
+  chown root:root /opt/gh-config/config.yml
+  chmod 644 /opt/gh-config/config.yml
 fi
 chmod 711 /opt/gh-config
-chmod 644 /opt/gh-config/* 2>/dev/null || true
+
+# Sudoers: allow claude to read the token file via the gh-wrapper's fallback mechanism.
+# This is the ONLY sudo privilege granted to the claude user.
+# The command approval system's Tier 1 block on \bsudo\b prevents direct invocation.
+echo 'claude ALL=(root) NOPASSWD: /usr/bin/cat /opt/gh-config/.ghtoken' > /etc/sudoers.d/gh-token
+chmod 440 /etc/sudoers.d/gh-token
+chown root:root /etc/sudoers.d/gh-token
 
 # Configure npm/bun auth for GitHub Packages
 # Uses env var substitution — npm/bun expand ${VAR} at runtime from the process environment.
