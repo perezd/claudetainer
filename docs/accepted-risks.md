@@ -67,6 +67,24 @@ Each entry includes: risk title, affected layer(s), why it can't be resolved, co
 - **Severity:** Low
 - **Date identified:** 2026-03-30 (identified during panel review of #23)
 
+### Sudoers-mediated token file read
+
+- **Affected layer:** Container Hardening, Command Approval
+- **Description:** The `claude` user has a targeted sudoers entry allowing `sudo /usr/bin/cat /opt/gh-config/.ghtoken`. This is used by `gh-wrapper.sh` as a fallback when Claude Code strips `GH_TOKEN` from subprocess environments. While the Tier 1 `\bsudo\b` block prevents direct `sudo` invocation through Claude Code's command pipeline, the entry is exploitable via script creation: writing a script that internally calls the allowed `sudo` command, then executing it. This is part of a broader class of pre-existing approval system gaps (ungated interpreter execution, encoding utilities) tracked separately.
+- **Why it can't be resolved:** The `gh-wrapper.sh` must run as the `claude` user (UID 1000) because `gh` commands are invoked by claude's processes. When Claude Code strips environment variables from subprocesses, the wrapper needs a fallback credential source. Making the token file `root:root 600` with a sudoers-mediated read is the strongest protection available without a compiled setuid helper.
+- **Compensating controls:** The sudoers entry is narrowly scoped to one specific file path (no wildcards). The read-only rootfs (remounted at boot step 9) prevents modification of the sudoers entry, wrapper script, and token file. The `.ghtoken` path is Tier 2 hot-worded. The multi-step exploit (create script, chmod, execute) is non-trivial and leaves filesystem traces. Network isolation independently limits exfiltration targets.
+- **Severity:** Medium
+- **Date identified:** 2026-04-02 (identified during panel review of #32)
+
+### Single PAT for GitHub API and npm registry auth
+
+- **Affected layer:** Container Hardening
+- **Description:** Both `GH_TOKEN` (GitHub API / git credential helper) and `CLAUDETAINER_NPM_TOKEN` (GitHub Packages npm registry) are derived from the same `GH_PAT` at runtime. Compromise of either access path exposes the full PAT, which may have scopes beyond what each consumer needs individually.
+- **Why it can't be resolved:** GitHub fine-grained PATs do not yet support the scope separation needed to create two tokens with disjoint permissions for `gh` CLI operations vs. npm registry access. The operational complexity of managing two classic PATs with minimal-overlap scopes exceeds the security benefit in a single-purpose container.
+- **Compensating controls:** The `CLAUDETAINER_NPM_TOKEN` abstraction allows a future split to separate tokens without changing consumer code. Both variable names are Tier 1 hard-blocked (direct references) and Tier 2 hot-worded (indirect references). Network isolation limits where either token can be used. Operators should follow least-privilege guidance: prefer fine-grained PATs with minimal scopes.
+- **Severity:** Low
+- **Date identified:** 2026-04-02 (identified during panel review of #32)
+
 ---
 
 ## Resolved Risks
