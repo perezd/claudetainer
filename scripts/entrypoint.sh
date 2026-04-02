@@ -152,19 +152,9 @@ echo "$GH_PAT" > /opt/gh-config/.ghtoken
 chown root:root /opt/gh-config/.ghtoken
 chmod 600 /opt/gh-config/.ghtoken
 
-# Lock down hosts.yml (written by gh auth login above) — contains the PAT
-if [[ -f /root/.config/gh/hosts.yml ]]; then
-  cp /root/.config/gh/hosts.yml /opt/gh-config/hosts.yml
-  chown root:root /opt/gh-config/hosts.yml
-  chmod 600 /opt/gh-config/hosts.yml
-  rm -f /root/.config/gh/hosts.yml
-fi
-# Copy non-sensitive config (git_protocol, editor, etc.)
-if [[ -f /root/.config/gh/config.yml ]]; then
-  cp /root/.config/gh/config.yml /opt/gh-config/config.yml
-  chown root:root /opt/gh-config/config.yml
-  chmod 644 /opt/gh-config/config.yml
-fi
+# Remove hosts.yml (written by gh auth login above) — contains the PAT.
+# No longer needed: gh-wrapper uses GH_TOKEN env var, not config files.
+rm -f /root/.config/gh/hosts.yml
 chmod 711 /opt/gh-config
 
 # Sudoers: allow claude to read the token file via the gh-wrapper's fallback mechanism.
@@ -173,6 +163,12 @@ chmod 711 /opt/gh-config
 echo 'claude ALL=(root) NOPASSWD: /usr/bin/cat /opt/gh-config/.ghtoken' > /etc/sudoers.d/gh-token
 chmod 440 /etc/sudoers.d/gh-token
 chown root:root /etc/sudoers.d/gh-token
+
+# Validate sudoers drop-in to avoid breaking sudo inside the container.
+if ! visudo -c -f /etc/sudoers.d/gh-token; then
+  echo "[ENTRYPOINT] ERROR: Invalid sudoers drop-in at /etc/sudoers.d/gh-token; aborting to avoid breaking sudo." >&2
+  exit 1
+fi
 
 # Configure npm/bun auth for GitHub Packages
 # Uses env var substitution — npm/bun expand ${VAR} at runtime from the process environment.
