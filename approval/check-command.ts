@@ -498,17 +498,21 @@ export async function isContextualGhCommand(command: string): Promise<boolean> {
   // regexes would miss commands with leading spaces.
   const cmd = command.trimStart();
 
-  // Reject compound commands — they must go through Haiku
-  if (hasCompoundOperators(cmd)) return false;
+  // Strip known-safe shell wrappers, then reject remaining compound operators
+  const coreCmd = extractCoreCommand(cmd);
+  if (hasCompoundOperators(coreCmd)) return false;
 
   // Reject disallowed HTTP methods (anything outside GET/POST/PATCH allowlist).
   // Only applies to gh api — other subcommands don't use -X/--method flags.
-  if (/^gh\s+api\b/.test(cmd) && hasBlockedMethod(cmd)) return false;
+  if (/^gh\s+api\b/.test(coreCmd) && hasBlockedMethod(coreCmd)) return false;
 
   // Parse target repo from the command (including gh repo sync)
-  const syncResult = parseGhRepoSyncTarget(cmd);
+  const syncResult = parseGhRepoSyncTarget(coreCmd);
   const target =
-    parseGhApiTarget(cmd) ?? parseGhRepoFlag(cmd) ?? syncResult?.target ?? null;
+    parseGhApiTarget(coreCmd) ??
+    parseGhRepoFlag(coreCmd) ??
+    syncResult?.target ??
+    null;
   if (!target) return false;
 
   // Resolve related repos from git remotes
@@ -648,12 +652,19 @@ if (isMainModule) {
           // Pre-Haiku: check if this is a contextual gh command.
           // Only apply when the hot word is gh-related — credential hot words
           // (GH_PAT, CLAUDE_CODE_OAUTH_TOKEN, etc.) must always reach Haiku.
+          // Compute extraction tag before the async check — extractCoreCommand
+          // is pure and cheap, and the tag describes the input shape.
+          const extracted = extractCoreCommand(command.trimStart());
+          const coreExtracted = extracted !== command.trimStart();
           if (
             tierResult.hotWord.startsWith("gh ") &&
             !ALWAYS_ESCALATE_HOT_WORDS.has(tierResult.hotWord) &&
             (await isContextualGhCommand(command))
           ) {
-            console.error(`[HOOK] ALLOW (contextual gh command): ${command}`);
+            const tag = coreExtracted
+              ? "contextual gh command, core-extracted"
+              : "contextual gh command";
+            console.error(`[HOOK] ALLOW (${tag}): ${command}`);
             outputDecision("allow");
             process.exit(0);
           }
