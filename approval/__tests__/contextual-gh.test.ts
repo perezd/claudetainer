@@ -430,6 +430,66 @@ describe("hasCompoundOperators", () => {
       ),
     ).toBe(false);
   });
+
+  // --- Single-quote stripping tests ---
+
+  test("allows pipe inside single-quoted --jq argument", () => {
+    expect(
+      hasCompoundOperators(
+        "gh api repos/o/r/issues --jq '.[] | {id: .id, body: .body[:100]}'",
+      ),
+    ).toBe(false);
+  });
+
+  test("allows ampersand inside single-quoted -f argument", () => {
+    expect(
+      hasCompoundOperators("gh api repos/o/r/issues -f 'body=test & stuff'"),
+    ).toBe(false);
+  });
+
+  test("allows pipe inside equals-adjacent single-quoted value", () => {
+    expect(
+      hasCompoundOperators("gh api repos/o/r/issues --field='value | pipe'"),
+    ).toBe(false);
+  });
+
+  test("allows standalone empty single-quoted string", () => {
+    expect(
+      hasCompoundOperators("gh api repos/o/r --jq '' --hostname foo"),
+    ).toBe(false);
+  });
+
+  test("blocks real pipe after single-quoted argument", () => {
+    expect(hasCompoundOperators("gh api repos/o/r --jq '.id' | head -5")).toBe(
+      true,
+    );
+  });
+
+  test("blocks unmatched single quote (odd count)", () => {
+    expect(hasCompoundOperators("gh api repos/o/r --jq 'unmatched")).toBe(true);
+  });
+
+  test("blocks token-embedded quotes (adjacency check)", () => {
+    expect(hasCompoundOperators("gh api repos/good'x'/repo/issues")).toBe(true);
+  });
+
+  test("blocks adjacent-quote pipe", () => {
+    expect(hasCompoundOperators("'a'|'b'")).toBe(true);
+  });
+
+  test("blocks ANSI-C quoting $'...' (adjacency check)", () => {
+    expect(hasCompoundOperators("gh api repos/o/r --jq $'x'")).toBe(true);
+  });
+
+  test("blocks adjacent quote concatenation 'a''b'", () => {
+    expect(hasCompoundOperators("gh api repos/o/r 'a''b'")).toBe(true);
+  });
+
+  test("blocks escaped quote pattern (odd count)", () => {
+    expect(hasCompoundOperators("gh api repos/o/r --jq 'it'\\''s | .id'")).toBe(
+      true,
+    );
+  });
 });
 
 describe("extractGitHubRepo", () => {
