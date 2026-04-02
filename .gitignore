@@ -1,4 +1,4 @@
 approval/node_modules/
 .DS_Store
 *.bun-build
-.worktrees/
+.worktrees/.worktrees/

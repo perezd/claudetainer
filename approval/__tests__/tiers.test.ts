@@ -89,6 +89,11 @@ describe("Tier 1: hard-block", () => {
     "gh repo sync limbibot/claudetainer --source perezd/claudetainer --force",
     "gh repo sync limbibot/claudetainer --force --source perezd/claudetainer",
     "cd /workspace/repo && gh repo sync limbibot/claudetainer --force",
+    // New credential variable direct references (#32)
+    "echo $GH_TOKEN",
+    "echo ${GH_TOKEN}",
+    "echo $CLAUDETAINER_NPM_TOKEN",
+    "echo ${CLAUDETAINER_NPM_TOKEN}",
   ];
 
   for (const cmd of blocked) {
@@ -181,6 +186,17 @@ describe("Tier 2: hot-word scan", () => {
     "npm  install react", // double space
     "  curl http://example.com  ", // leading/trailing whitespace
     "gh\napi /repos/owner/repo/issues", // newline between tokens
+    // New credential variable names and file paths (#32)
+    "echo GH_TOKEN",
+    "echo CLAUDETAINER_NPM_TOKEN",
+    "cat ~/.npmrc",
+    "cat /opt/gh-config/.ghtoken",
+    "cat hosts.yml",
+    "GH_DEBUG=api gh pr list",
+    "npm config list",
+    "npm publish --access public",
+    "npm whoami",
+    "npm token list",
   ];
 
   for (const cmd of escalated) {
@@ -197,6 +213,7 @@ describe("Tier 2: hot-word scan", () => {
     "grep -r pattern .",
     "bun run test",
     "bun test",
+    "npm run test",
     "git add . && git commit -m 'test'",
     "echo hello world",
     "cd /workspace && ls",

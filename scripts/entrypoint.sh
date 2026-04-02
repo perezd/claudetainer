@@ -137,25 +137,37 @@ git config --system user.email "${GIT_USER_EMAIL:-claudetainer@noreply.github.co
 # Force HTTPS for all GitHub URLs (container has no SSH client)
 git config --system url."https://github.com/".insteadOf "git@github.com:"
 
-# Authenticate gh CLI with the PAT
-echo "$GH_PAT" | gh auth login --with-token --hostname github.com 2>/dev/null || true
+# Configure git credential helper at system level so claude user can use it.
+# Uses the wrapper at /usr/local/bin/gh which handles GH_TOKEN fallback.
+git config --system credential.https://github.com.helper '!/usr/local/bin/gh auth git-credential'
 
-# Configure git credential helper at system level so claude user can use it
-# gh auth setup-git only writes to ~/.gitconfig (root), so we set it explicitly
-# GH_CONFIG_DIR is hardcoded in the command so it works regardless of environment inheritance
-git config --system credential.https://github.com.helper '!GH_CONFIG_DIR=/opt/gh-config /usr/bin/gh auth git-credential'
-
-# Copy gh config to a shared location readable by claude user
+# Write GH_PAT to a dedicated token file for the gh-wrapper fallback.
+# Mode 600 root:root — the claude user cannot read this directly.
+# The gh-wrapper reads it via a targeted sudoers entry when GH_TOKEN is not in the environment.
 mkdir -p /opt/gh-config
-if [[ -d /root/.config/gh ]]; then
-  cp -r /root/.config/gh/* /opt/gh-config/ 2>/dev/null || true
-fi
+( umask 077 && printf '%s\n' "$GH_PAT" > /opt/gh-config/.ghtoken )
+chown root:root /opt/gh-config/.ghtoken
+chmod 600 /opt/gh-config/.ghtoken
 chmod 711 /opt/gh-config
-chmod 644 /opt/gh-config/* 2>/dev/null || true
+
+# Sudoers: allow claude to read the token file via the gh-wrapper's fallback mechanism.
+# This is the ONLY sudo privilege granted to the claude user.
+# The command approval system's Tier 1 block on \bsudo\b prevents direct invocation.
+echo 'claude ALL=(root) NOPASSWD: /usr/bin/cat /opt/gh-config/.ghtoken' > /etc/sudoers.d/gh-token
+chmod 440 /etc/sudoers.d/gh-token
+chown root:root /etc/sudoers.d/gh-token
+
+# Validate sudoers drop-in to avoid breaking sudo inside the container.
+if ! visudo -c -f /etc/sudoers.d/gh-token; then
+  echo "[ENTRYPOINT] ERROR: Invalid sudoers drop-in at /etc/sudoers.d/gh-token; aborting to avoid breaking sudo." >&2
+  exit 1
+fi
 
 # Configure npm/bun auth for GitHub Packages
-cat > /home/claude/.npmrc <<NPMRC
-//npm.pkg.github.com/:_authToken=${GH_PAT}
+# Uses env var substitution — npm/bun expand ${VAR} at runtime from the process environment.
+# The file contains only the variable reference, not the plaintext token.
+cat > /home/claude/.npmrc <<'NPMRC'
+//npm.pkg.github.com/:_authToken=${CLAUDETAINER_NPM_TOKEN}
 NPMRC
 chown root:root /home/claude/.npmrc
 chmod 644 /home/claude/.npmrc
