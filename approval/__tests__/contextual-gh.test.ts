@@ -1049,3 +1049,52 @@ describe("extractCoreCommand", () => {
     );
   });
 });
+
+describe("issue #58 reproduction cases", () => {
+  let originalFile: typeof Bun.file;
+
+  beforeEach(() => {
+    originalFile = Bun.file;
+    // @ts-expect-error — partial mock of Bun.file for testing
+    Bun.file = (path: string) => {
+      if (path === REMOTE_URLS_PATH) {
+        return {
+          text: () =>
+            Promise.resolve(
+              "https://github.com/limbibot/claudetainer.git\nhttps://github.com/perezd/claudetainer.git\n",
+            ),
+        };
+      }
+      throw new Error(`File not found: ${path}`);
+    };
+  });
+
+  afterEach(() => {
+    Bun.file = originalFile;
+  });
+
+  test("gh pr create with 2>&1 is exempted", async () => {
+    expect(
+      await isContextualGhCommand(
+        'gh pr create --repo perezd/claudetainer --title "fix: restrict credential file permissions to prevent exposure" --body-file /tmp/pr-body.md 2>&1',
+      ),
+    ).toBe(true);
+  });
+
+  test("gh api PATCH with 2>&1 is exempted", async () => {
+    expect(
+      await isContextualGhCommand(
+        "gh api repos/perezd/claudetainer/issues/comments/4180740245 -X PATCH --body-file /tmp/plan-update.md 2>&1",
+      ),
+    ).toBe(true);
+  });
+
+  test("gh api PATCH with process substitution still goes to Haiku", async () => {
+    // This case has <(...) which we intentionally don't strip
+    expect(
+      await isContextualGhCommand(
+        "gh api repos/perezd/claudetainer/issues/comments/4174499209 -X PATCH --input <(jq -n --rawfile body /tmp/plan-updated.md '{\"body\": $body}') 2>&1 | head -5",
+      ),
+    ).toBe(false);
+  });
+});
