@@ -490,6 +490,28 @@ describe("hasCompoundOperators", () => {
       true,
     );
   });
+
+  test("detects > output redirection", () => {
+    expect(hasCompoundOperators("gh api repos/o/r/issues > /tmp/out")).toBe(
+      true,
+    );
+  });
+  test("detects >> append redirection", () => {
+    expect(hasCompoundOperators("gh api repos/o/r/issues >> /tmp/out")).toBe(
+      true,
+    );
+  });
+  test("detects < input redirection", () => {
+    expect(hasCompoundOperators("gh api repos/o/r < /tmp/input")).toBe(true);
+  });
+  test("allows < inside single-quoted string", () => {
+    expect(hasCompoundOperators("gh api repos/o/r --jq '.id < 5'")).toBe(false);
+  });
+  test("allows > inside single-quoted string", () => {
+    expect(hasCompoundOperators("gh api repos/o/r --jq '.count > 0'")).toBe(
+      false,
+    );
+  });
 });
 
 describe("extractGitHubRepo", () => {

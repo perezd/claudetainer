@@ -297,7 +297,7 @@ export function hasBlockedMethod(command: string): boolean {
   return matches.some((m) => !ALLOWED_METHODS.has(m[1].toUpperCase()));
 }
 
-const COMPOUND_OPERATORS_RE = /[;&|`\n$()]/;
+const COMPOUND_OPERATORS_RE = /[;&|`\n$()<>]/;
 const SINGLE_QUOTE_PAIR_RE = /'[^']*'/g;
 
 /**
