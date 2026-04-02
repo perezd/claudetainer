@@ -20,7 +20,8 @@ run_as_claude() {
   sudo -u claude \
     HOME="$CLAUDE_HOME" \
     PATH="$CLAUDE_HOME/.local/bin:$CLAUDE_HOME/.bun/bin:$PATH" \
-    GH_CONFIG_DIR="/opt/gh-config" \
+    GH_TOKEN="$GH_PAT" \
+    CLAUDETAINER_NPM_TOKEN="$GH_PAT" \
     CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
     LANG="$LANG" \
     LC_ALL="$LC_ALL" \
@@ -141,7 +142,8 @@ fi
 sudo -u claude \
   HOME="$CLAUDE_HOME" \
   PATH="$CLAUDE_HOME/.local/bin:$CLAUDE_HOME/.bun/bin:$PATH" \
-  GH_CONFIG_DIR="/opt/gh-config" \
+  GH_TOKEN="$GH_PAT" \
+  CLAUDETAINER_NPM_TOKEN="$GH_PAT" \
   CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
   COLORTERM="truecolor" \
   LANG="$LANG" \
@@ -155,7 +157,8 @@ sudo -u claude \
 sudo -u claude \
   HOME="$CLAUDE_HOME" \
   PATH="$CLAUDE_HOME/.local/bin:$CLAUDE_HOME/.bun/bin:$PATH" \
-  GH_CONFIG_DIR="/opt/gh-config" \
+  GH_TOKEN="$GH_PAT" \
+  CLAUDETAINER_NPM_TOKEN="$GH_PAT" \
   COLORTERM="truecolor" \
   LANG="$LANG" \
   LC_ALL="$LC_ALL" \
