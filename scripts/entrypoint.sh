@@ -137,9 +137,6 @@ git config --system user.email "${GIT_USER_EMAIL:-claudetainer@noreply.github.co
 # Force HTTPS for all GitHub URLs (container has no SSH client)
 git config --system url."https://github.com/".insteadOf "git@github.com:"
 
-# Authenticate gh CLI with the PAT
-echo "$GH_PAT" | gh auth login --with-token --hostname github.com 2>/dev/null || true
-
 # Configure git credential helper at system level so claude user can use it.
 # Uses the wrapper at /usr/local/bin/gh which handles GH_TOKEN fallback.
 git config --system credential.https://github.com.helper '!/usr/local/bin/gh auth git-credential'
@@ -150,10 +147,6 @@ git config --system credential.https://github.com.helper '!/usr/local/bin/gh aut
 mkdir -p /opt/gh-config
 ( umask 077 && printf '%s\n' "$GH_PAT" > /opt/gh-config/.ghtoken )
 chown root:root /opt/gh-config/.ghtoken
-
-# Remove hosts.yml (written by gh auth login above) — contains the PAT.
-# No longer needed: gh-wrapper uses GH_TOKEN env var, not config files.
-rm -f /root/.config/gh/hosts.yml
 chmod 711 /opt/gh-config
 
 # Sudoers: allow claude to read the token file via the gh-wrapper's fallback mechanism.
