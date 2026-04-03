@@ -1144,7 +1144,7 @@ describe("issue #58 reproduction cases", () => {
   test("gh api PATCH with 2>&1 is exempted", async () => {
     expect(
       await isContextualGhCommand(
-        "gh api repos/perezd/claudetainer/issues/comments/4180740245 -X PATCH --body-file /tmp/plan-update.md 2>&1",
+        "gh api repos/perezd/claudetainer/issues/comments/4180740245 -X PATCH --input /tmp/plan-update.json 2>&1",
       ),
     ).toBe(true);
   });
