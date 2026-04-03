@@ -350,21 +350,40 @@ export function hasCompoundOperators(command: string): boolean {
 
 /**
  * Safe trailing-pipe filter commands. Read-only, non-interactive utilities
- * used to consume or filter stdout in a pipeline.
+ * that only consume stdin in a pipeline. Commands that can read files
+ * from arguments (like `cat`) are excluded — even though `| cat` with
+ * no args is a harmless passthrough, allowing it opens a bypass via
+ * `| cat secrets.txt` with relative paths that evade the path check.
  *
- * These commands CAN read files when given filename arguments (e.g.,
- * `cat /path/to/file`), so the pipe-stripping logic additionally rejects
- * filter args that look like file paths (starting with /, ~, or .).
  * Tier 2 hot words on the full command also catch known credential file
  * names (.npmrc, hosts.yml, .ghtoken) as a compensating control.
  */
-const SAFE_PIPE_FILTERS = new Set(["head", "tail", "jq", "wc", "grep", "cat"]);
+const SAFE_PIPE_FILTERS = new Set(["head", "tail", "jq", "wc", "grep"]);
 
 /**
  * Characters that are shell metacharacters in paths. Used to validate
  * the cd prefix path contains no injection vectors.
  */
 const PATH_METACHAR_RE = /[;&|`\n$()<>"'*?[\]{}!#~]/;
+
+/**
+ * Find the index of the last `|` character that is not inside single quotes.
+ * Returns -1 if no unquoted pipe is found.
+ */
+function findLastUnquotedPipe(cmd: string): number {
+  let inSingleQuote = false;
+  let lastPipe = -1;
+  for (let i = 0; i < cmd.length; i++) {
+    if (cmd[i] === "'" && !inSingleQuote) {
+      inSingleQuote = true;
+    } else if (cmd[i] === "'" && inSingleQuote) {
+      inSingleQuote = false;
+    } else if (cmd[i] === "|" && !inSingleQuote) {
+      lastPipe = i;
+    }
+  }
+  return lastPipe;
+}
 
 /**
  * Extract the core command from a compound command by stripping known-safe
@@ -393,21 +412,27 @@ export function extractCoreCommand(command: string): string {
   // 2. Strip stderr redirection `2>&1`
   cmd = cmd.replace(/\s*2>&1\s*/g, " ").trim();
 
-  // 3. Strip trailing pipe to safe filter (repeated for chains)
+  // 3. Strip trailing pipe to safe filter (repeated for chains).
+  //    Find the last UNQUOTED pipe to avoid splitting on `|` inside
+  //    single-quoted arguments (e.g., jq '.items | .id').
   let changed = true;
   while (changed) {
     changed = false;
-    // Match the last `| <cmd> [args]` segment (greedy .* to find the last pipe)
-    const pipeMatch = cmd.match(/^(.*)\s*\|\s*(\S+)(.*)$/);
-    if (pipeMatch) {
-      const [, before, filterCmd, filterArgs] = pipeMatch;
+    const lastPipe = findLastUnquotedPipe(cmd);
+    if (lastPipe >= 0) {
+      const before = cmd.slice(0, lastPipe);
+      const afterPipe = cmd.slice(lastPipe + 1).trimStart();
+      const spaceIdx = afterPipe.indexOf(" ");
+      const filterCmd =
+        spaceIdx >= 0 ? afterPipe.slice(0, spaceIdx) : afterPipe;
+      const filterArgs = spaceIdx >= 0 ? afterPipe.slice(spaceIdx) : "";
       // Only strip if:
       // a) The filter command is in the safe allowlist
       // b) The filter args contain no further shell operators
       // c) No args look like file paths (safe filters can read files
       //    when given filename args, bypassing the stdin-only assumption)
       const strippedArgs = filterArgs.replace(SINGLE_QUOTE_PAIR_RE, "");
-      const hasPathArg = /(?:^|\s)[/~.]/.test(strippedArgs);
+      const hasPathArg = /(?:^|\s)["']?[/~.]/.test(strippedArgs);
       if (
         SAFE_PIPE_FILTERS.has(filterCmd) &&
         !COMPOUND_OPERATORS_RE.test(strippedArgs) &&

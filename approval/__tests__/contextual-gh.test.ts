@@ -960,9 +960,9 @@ describe("extractCoreCommand", () => {
       "gh api repos/o/r/issues",
     );
   });
-  test("strips trailing | cat", () => {
+  test("does NOT strip | cat (removed from safe filters — can read files)", () => {
     expect(extractCoreCommand("gh api repos/o/r/issues | cat")).toBe(
-      "gh api repos/o/r/issues",
+      "gh api repos/o/r/issues | cat",
     );
   });
   test("strips chained safe pipes | jq '.id' | head -5", () => {
@@ -987,7 +987,7 @@ describe("extractCoreCommand", () => {
   });
 
   // --- File path args in safe filters ---
-  test("does NOT strip safe filter with absolute path arg", () => {
+  test("does NOT strip cat with absolute path arg (cat not in safe filters)", () => {
     expect(
       extractCoreCommand("gh api repos/o/r/issues | cat /home/claude/secrets"),
     ).toBe("gh api repos/o/r/issues | cat /home/claude/secrets");
@@ -1069,6 +1069,37 @@ describe("extractCoreCommand", () => {
     expect(extractCoreCommand("cd ~/repo && gh api repos/o/r/issues")).toBe(
       "cd ~/repo && gh api repos/o/r/issues",
     );
+  });
+
+  // --- Quoted file path bypass (PR #65 review finding) ---
+  test("does NOT strip safe filter with double-quoted path arg", () => {
+    expect(
+      extractCoreCommand('gh api repos/o/r/issues | grep "/etc/passwd"'),
+    ).toBe('gh api repos/o/r/issues | grep "/etc/passwd"');
+  });
+  test("does NOT strip safe filter with double-quoted relative path arg", () => {
+    expect(
+      extractCoreCommand('gh api repos/o/r/issues | grep "./config"'),
+    ).toBe('gh api repos/o/r/issues | grep "./config"');
+  });
+  test("does NOT strip safe filter with double-quoted tilde path arg", () => {
+    expect(
+      extractCoreCommand('gh api repos/o/r/issues | head "~/secrets"'),
+    ).toBe('gh api repos/o/r/issues | head "~/secrets"');
+  });
+
+  // --- jq with | inside single-quoted args (PR #65 review finding) ---
+  test("strips jq with pipe inside single-quoted filter expression", () => {
+    expect(
+      extractCoreCommand("gh api repos/o/r/issues | jq '.items | .id'"),
+    ).toBe("gh api repos/o/r/issues");
+  });
+  test("strips chained jq with internal pipe | head", () => {
+    expect(
+      extractCoreCommand(
+        "gh api repos/o/r/issues | jq '.items | .name' | head -5",
+      ),
+    ).toBe("gh api repos/o/r/issues");
   });
 });
 
