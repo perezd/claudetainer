@@ -10,7 +10,7 @@ export type Verdict =
 const VALID_VERDICTS = new Set(["allow", "block", "approve", "need_files"]);
 const BLOCKED_FILE_PATTERNS = [".ghtoken", ".npmrc", "hosts.yml", "/tmp/otel/"];
 const MAX_FILE_SIZE = 8192; // 8KB
-const MAX_FILES = 3;
+const MAX_FILES = 10;
 
 /**
  * Parse a verdict JSON string from Haiku's response.
@@ -112,8 +112,11 @@ function readFileForInspection(path: string): string {
     const readSize = Math.min(fileSize, MAX_FILE_SIZE + 1);
     const fd = openSync(path, "r");
     const buf = new Uint8Array(readSize);
-    readSync(fd, buf, 0, readSize, 0);
-    closeSync(fd);
+    try {
+      readSync(fd, buf, 0, readSize, 0);
+    } finally {
+      closeSync(fd);
+    }
 
     // Binary detection: check first 512 bytes for null bytes
     const header = buf.subarray(0, Math.min(512, readSize));

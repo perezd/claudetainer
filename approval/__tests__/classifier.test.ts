@@ -80,13 +80,14 @@ describe("parseVerdict", () => {
     expect(v.verdict).toBe("block");
   });
 
-  test("caps need_files at MAX_FILES (3)", () => {
+  test("caps need_files at MAX_FILES (10)", () => {
+    const files = Array.from({ length: 15 }, (_, i) => `/tmp/f${i}`);
     const v = parseVerdict(
-      '{"verdict":"need_files","files":["/tmp/a","/tmp/b","/tmp/c","/tmp/d","/tmp/e"],"reason":""}',
+      JSON.stringify({ verdict: "need_files", files, reason: "" }),
     );
     expect(v.verdict).toBe("need_files");
     if (v.verdict === "need_files") {
-      expect(v.files).toHaveLength(3);
+      expect(v.files).toHaveLength(10);
     }
   });
 });

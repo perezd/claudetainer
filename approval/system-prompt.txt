@@ -69,7 +69,7 @@ If the command references files (via flags like --input, --body-file, @file, or 
 To request files: {"verdict":"need_files","files":["/path/to/file1"],"reason":"..."}
 
 - Only request files when their contents would materially change your classification
-- You may request up to 3 files
+- You may request up to 10 files
 - File contents will be provided in a follow-up message with <referenced-file> tags
 - After receiving file contents, you MUST provide a final classification (allow/block/approve) — no further file requests
 

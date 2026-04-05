@@ -129,12 +129,15 @@ function denyCheck(seg: ParsedSegment): RuleResult | null {
     }
   }
 
-  // /proc/ access
-  if (seg.args.some((a) => a.startsWith("/proc/"))) {
-    return {
-      decision: "deny",
-      reason: "/proc/ access can leak kernel/process state",
-    };
+  // /proc/ access — check both args and redirection targets (e.g. cat < /proc/self/environ)
+  {
+    const allPaths = [...seg.args, ...seg.redirections.map((r) => r.target)];
+    if (allPaths.some((a) => a.startsWith("/proc/"))) {
+      return {
+        decision: "deny",
+        reason: "/proc/ access can leak kernel/process state",
+      };
+    }
   }
 
   // /dev/tcp/ or /dev/udp/ bash network redirection
