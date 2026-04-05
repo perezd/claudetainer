@@ -118,6 +118,27 @@ describe("validateFilePath", () => {
   test("rejects /tmp/otel/", () => {
     expect(validateFilePath("/tmp/otel/otel-env")).toBe(false);
   });
+
+  test("rejects paths with quotes (attribute injection)", () => {
+    expect(validateFilePath('/tmp/foo" injected="true')).toBe(false);
+  });
+
+  test("rejects paths with angle brackets", () => {
+    expect(validateFilePath("/tmp/<script>")).toBe(false);
+  });
+
+  test("rejects paths with newlines", () => {
+    expect(validateFilePath("/tmp/foo\nbar")).toBe(false);
+  });
+
+  test("rejects paths with spaces", () => {
+    expect(validateFilePath("/tmp/foo bar")).toBe(false);
+  });
+
+  test("allows paths with @ and + chars", () => {
+    expect(validateFilePath("/tmp/@scope/pkg")).toBe(true);
+    expect(validateFilePath("/workspace/file+backup.ts")).toBe(true);
+  });
 });
 
 describe("buildUserMessage", () => {

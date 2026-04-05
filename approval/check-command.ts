@@ -120,11 +120,34 @@ async function evaluateCommand(raw: string): Promise<SegmentResult> {
       return { decision: "deny", reason: prescanResult.reason };
     }
 
+    // Layer 4: tokenize (always, even if prescan escalated)
+    const tokens = tokenize(line);
+
+    // Layer 5: segment split
+    const segments = splitSegments(tokens);
+
     let lineDecision: Decision = "allow";
     let lineReason = "";
 
     if (prescanResult.decision === "escalate") {
-      // Escalate the whole line to Haiku
+      // Prescan flagged this line — run structural + deny checks first,
+      // then escalate to Haiku only if no deny fires. This prevents
+      // always-block programs (e.g. sudo) from bypassing deny rules
+      // when a credential name appears in the same command.
+      for (const seg of segments) {
+        const parsed = parseSegment(seg.tokens, seg.isPipeTarget);
+        if (parsed.hasOperatorTokens) {
+          return { decision: "deny", reason: "subshell/substitution operator" };
+        }
+        if (parsed.hasBackticks) {
+          return { decision: "deny", reason: "backtick command substitution" };
+        }
+        const ruleResult = evaluateRules(parsed);
+        if (ruleResult.decision === "deny") {
+          return { decision: "deny", reason: ruleResult.reason };
+        }
+      }
+      // No deny fired — escalate to Haiku
       const verdict = await classifyWithHaiku(line);
       if (verdict.verdict === "block") {
         return { decision: "deny", reason: verdict.reason };
@@ -132,12 +155,6 @@ async function evaluateCommand(raw: string): Promise<SegmentResult> {
       lineDecision = verdict.verdict === "approve" ? "ask" : "allow";
       lineReason = verdict.reason;
     } else {
-      // Layer 4: tokenize
-      const tokens = tokenize(line);
-
-      // Layer 5: segment split
-      const segments = splitSegments(tokens);
-
       // Layer 6: per-segment evaluation
       for (const seg of segments) {
         const result = await evaluateSegment(

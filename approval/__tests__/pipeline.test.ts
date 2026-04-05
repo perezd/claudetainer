@@ -17,11 +17,8 @@ function quickEval(command: string): "deny" | "escalate" | "allow" {
   for (const line of splitResult.lines) {
     const prescan = prescanLine(line);
     if (prescan.decision === "deny") return "deny";
-    if (prescan.decision === "escalate") {
-      worst = worst === "deny" ? "deny" : "escalate";
-      continue;
-    }
 
+    // Always tokenize and run deny checks, even if prescan escalated
     const tokens = tokenize(line);
     const segments = splitSegments(tokens);
 
@@ -36,12 +33,17 @@ function quickEval(command: string): "deny" | "escalate" | "allow" {
         continue;
       }
 
-      // 6b+6d: rules
+      // 6b+6d: rules (deny rules always run, even on prescan-escalated lines)
       const result = evaluateRules(parsed);
       if (result.decision === "deny") return "deny";
       if (result.decision === "escalate") {
         worst = worst === "deny" ? "deny" : "escalate";
       }
+    }
+
+    // Prescan escalation applies after deny checks pass
+    if (prescan.decision === "escalate") {
+      worst = worst === "deny" ? "deny" : "escalate";
     }
   }
 
@@ -207,6 +209,13 @@ describe("pipeline integration — escalate", () => {
     expect(quickEval("cat .npmrc")).toBe("escalate"));
   test("escalates GH_TOKEN string", () =>
     expect(quickEval("echo GH_TOKEN")).toBe("escalate"));
+
+  // Deny-before-escalate: deny rules still fire even when prescan escalates
+  test("denies always-block program even with credential name present", () =>
+    expect(quickEval("bash -c 'echo GH_TOKEN'")).toBe("deny"));
+  test("denies git push --force even with credential name present", () =>
+    expect(quickEval("git push --force origin main GH_TOKEN")).toBe("deny"));
+
   test("escalates GH_DEBUG", () =>
     expect(quickEval("GH_DEBUG=1 gh api")).toBe("escalate"));
   test("escalates awk ENVIRON", () =>

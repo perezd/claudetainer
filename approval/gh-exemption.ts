@@ -13,28 +13,29 @@ export function extractRepoTarget(
   const sub1 = positionals[0];
 
   // gh api repos/owner/repo/...
-  // Only check the first positional after "api" (the endpoint path).
-  // Other positionals may be flag values and should not be treated as targets.
+  // Scan positionals for the repos/ pattern. Flag values like "-X PATCH"
+  // end up in positionals since parseSegment doesn't track flag-value
+  // consumption, but HTTP methods and other flag values won't match the
+  // repos/ pattern. The false positive risk is negligible.
   if (sub1 === "api") {
-    const endpoint = positionals[1];
-    if (!endpoint) return null;
+    for (const pos of positionals.slice(1)) {
+      // Pre-validate the path before regex matching
+      if (pos.includes("..")) return null;
+      if (pos.includes("%")) return null;
+      if (pos.includes("//")) return null;
 
-    // Pre-validate the path before regex matching
-    if (endpoint.includes("..")) return null;
-    if (endpoint.includes("%")) return null;
-    if (endpoint.includes("//")) return null;
+      const match = pos.match(/^\/?(repos\/([^/]+)\/([^/]+))/);
+      if (match) {
+        const owner = match[2];
+        const repo = match[3];
 
-    const match = endpoint.match(/^\/?(repos\/([^/]+)\/([^/]+))/);
-    if (match) {
-      const owner = match[2];
-      const repo = match[3];
+        if (!VALID_OWNER_REPO.test(owner)) return null;
+        if (!VALID_OWNER_REPO.test(repo)) return null;
 
-      if (!VALID_OWNER_REPO.test(owner)) return null;
-      if (!VALID_OWNER_REPO.test(repo)) return null;
-
-      return { owner, repo };
+        return { owner, repo };
+      }
     }
-    // Endpoint is not a repos/ path — cannot validate
+    // No recognizable repos/ path — cannot validate
     return null;
   }
 

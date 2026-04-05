@@ -11,6 +11,9 @@ const VALID_VERDICTS = new Set(["allow", "block", "approve", "need_files"]);
 const BLOCKED_FILE_PATTERNS = [".ghtoken", ".npmrc", "hosts.yml", "/tmp/otel/"];
 const MAX_FILE_SIZE = 8192; // 8KB
 const MAX_FILES = 10;
+// Conservative allowlist for path characters — prevents injection into
+// <referenced-file path="..."> attributes via ", <, >, newlines, etc.
+const SAFE_PATH_CHARS = /^[A-Za-z0-9._/+\-@]+$/;
 
 /**
  * Parse a verdict JSON string from Haiku's response.
@@ -83,6 +86,7 @@ export function parseVerdict(text: string): Verdict {
  * Validate a file path requested by Haiku for inspection.
  */
 export function validateFilePath(path: string): boolean {
+  if (!SAFE_PATH_CHARS.test(path)) return false;
   if (path.includes("..")) return false;
   if (!path.startsWith("/tmp/") && !path.startsWith("/workspace/")) {
     return false;
