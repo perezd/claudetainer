@@ -85,6 +85,24 @@ Each entry includes: risk title, affected layer(s), why it can't be resolved, co
 - **Severity:** Low
 - **Date identified:** 2026-04-02 (identified during panel review of #32)
 
+### Interpreter file execution allowed without inline flag
+
+- **Affected layer:** Command Approval
+- **Description:** `python3 script.py` (without `-c`) is allowed through the approval pipeline. A previously-written malicious script could be executed if the agent is tricked into running it.
+- **Why it can't be resolved:** Blocking all interpreter invocations would prevent legitimate development workflows (running test scripts, build tools, etc.). The `-c` flag is the primary vector for arbitrary code injection; file-based execution requires a pre-existing malicious file.
+- **Compensating controls:** Network isolation layer prevents exfiltration regardless of what the script does. The read-only rootfs limits persistent modifications. The prescan layer catches credential references in the command string itself.
+- **Severity:** Low
+- **Date identified:** 2026-04-05 (identified during tokenizer-first-approval redesign, #68)
+
+### gh pr merge auto-approved for related repos
+
+- **Affected layer:** Command Approval
+- **Description:** `gh pr merge` targeting repos matching configured git remotes is escalated to Haiku but not hard-blocked. Risk: unintended merge of a malicious PR if Haiku misjudges the command.
+- **Why it can't be resolved:** The agent's core workflow requires merging PRs as part of the development lifecycle. Hard-blocking would require human intervention for every merge.
+- **Compensating controls:** Branch protection rules on the target repository are the external gate — repos without branch protection are accepting this risk at the repository level. The command always reaches Haiku for classification (never auto-allowed). The boot-time remote snapshot ensures only related repos are eligible for the contextual exemption path.
+- **Severity:** Low
+- **Date identified:** 2026-04-05 (identified during tokenizer-first-approval redesign, #68)
+
 ---
 
 ## Resolved Risks
