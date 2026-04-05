@@ -47,6 +47,24 @@ describe("tokenize", () => {
     const strings = tokens.filter((t): t is string => typeof t === "string");
     expect(strings[0]).toBe("$SHELL");
   });
+
+  test("drops comment tokens from output", () => {
+    const tokens = tokenize("echo hello # this is a comment");
+    // Comment should be stripped — only string and operator tokens remain
+    expect(tokens).toEqual(["echo", "hello"]);
+  });
+
+  test("converts glob tokens to pattern strings", () => {
+    const tokens = tokenize("echo *.txt");
+    // Glob should become its literal pattern string
+    expect(tokens).toEqual(["echo", "*.txt"]);
+  });
+
+  test("preserves glob pattern with path for deny rule matching", () => {
+    const tokens = tokenize("rm -rf /tmp/*");
+    const strings = tokens.filter((t): t is string => typeof t === "string");
+    expect(strings).toContain("/tmp/*");
+  });
 });
 
 describe("splitSegments", () => {

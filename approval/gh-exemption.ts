@@ -39,10 +39,23 @@ export function extractRepoTarget(
     return null;
   }
 
-  // --repo=value or -R=value (from flags map)
-  const repoFlag = flags.get("--repo") ?? flags.get("-R");
+  // --repo=value (from flags map, parsed as --key=value)
+  const repoFlag = flags.get("--repo");
   if (typeof repoFlag === "string") {
     const parts = repoFlag.split("/");
+    if (parts.length === 2 && parts[0] && parts[1]) {
+      return { owner: parts[0], repo: parts[1] };
+    }
+    return null;
+  }
+
+  // -R=value — parseSegment expands multi-char short flags per-character,
+  // so -R=owner/repo becomes individual char flags and the value is lost.
+  // Scan raw args for the combined form.
+  const attachedShortRepo = args.find((arg) => arg.startsWith("-R="));
+  if (attachedShortRepo) {
+    const val = attachedShortRepo.slice(3);
+    const parts = val.split("/");
     if (parts.length === 2 && parts[0] && parts[1]) {
       return { owner: parts[0], repo: parts[1] };
     }

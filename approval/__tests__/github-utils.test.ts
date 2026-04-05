@@ -39,4 +39,21 @@ describe("extractGitHubRepo", () => {
   test("returns null for non-GitHub URL", () => {
     expect(extractGitHubRepo("https://gitlab.com/owner/repo.git")).toBeNull();
   });
+  test("handles repo name with dots (e.g. socket.io)", () => {
+    expect(extractGitHubRepo("https://github.com/socketio/socket.io")).toEqual({
+      owner: "socketio",
+      repo: "socket.io",
+    });
+  });
+  test("handles repo name with dots and .git suffix", () => {
+    expect(extractGitHubRepo("git@github.com:socketio/socket.io.git")).toEqual({
+      owner: "socketio",
+      repo: "socket.io",
+    });
+  });
+  test("handles SSH URL with dots in repo name", () => {
+    expect(
+      extractGitHubRepo("ssh://git@github.com/socketio/socket.io.git"),
+    ).toEqual({ owner: "socketio", repo: "socket.io" });
+  });
 });

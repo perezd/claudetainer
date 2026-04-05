@@ -106,7 +106,7 @@ async function evaluateCommand(raw: string): Promise<SegmentResult> {
     return { decision: "deny", reason: splitResult.reason };
   }
 
-  if (!("lines" in splitResult)) {
+  if (splitResult.lines.length === 0) {
     return { decision: "allow", reason: "empty command" };
   }
 

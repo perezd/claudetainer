@@ -10,7 +10,7 @@ import { evaluateRules } from "../rules";
 function quickEval(command: string): "deny" | "escalate" | "allow" {
   const splitResult = normalizeAndSplit(command);
   if (splitResult.decision === "deny") return "deny";
-  if (!("lines" in splitResult)) return "allow";
+  if (splitResult.lines.length === 0) return "allow";
 
   let worst: "allow" | "escalate" | "deny" = "allow";
 

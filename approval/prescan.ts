@@ -1,8 +1,7 @@
 export type PrescanResult =
   | { decision: "deny"; reason: string }
   | { decision: "escalate"; reason: string }
-  | { decision: "continue"; lines: string[] }
-  | { decision: "continue" };
+  | { decision: "continue"; lines: string[] };
 
 const INVALID_CONTROL_CHARS = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/;
 
@@ -20,7 +19,9 @@ const DEBUG_TELEMETRY = /GH_DEBUG|OTEL_EXPORTER_OTLP_HEADERS/;
 
 export function normalizeAndSplit(
   raw: string,
-): Extract<PrescanResult, { lines: string[] } | { decision: "deny" }> {
+):
+  | { decision: "deny"; reason: string }
+  | { decision: "continue"; lines: string[] } {
   if (raw.includes("\0")) {
     return { decision: "deny", reason: "null byte in command" };
   }
@@ -41,9 +42,12 @@ export function normalizeAndSplit(
   return { decision: "continue", lines };
 }
 
-export function prescanLine(
-  line: string,
-): Exclude<PrescanResult, { lines: string[] }> {
+export type PrescanLineResult =
+  | { decision: "deny"; reason: string }
+  | { decision: "escalate"; reason: string }
+  | { decision: "continue" };
+
+export function prescanLine(line: string): PrescanLineResult {
   if (CREDENTIAL_REF.test(line)) {
     return { decision: "deny", reason: "credential reference in command" };
   }

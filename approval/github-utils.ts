@@ -23,9 +23,9 @@ export function extractGitHubOwner(url: string): string | null {
 
 export function extractGitHubRepo(url: string): RepoTarget | null {
   const patterns = [
-    /https?:\/\/github\.com\/([^/]+)\/([^/.]+)/,
-    /git@github\.com:([^/]+)\/([^/.]+)/,
-    /ssh:\/\/git@github\.com\/([^/]+)\/([^/.]+)/,
+    /https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/,
+    /git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/,
+    /ssh:\/\/git@github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/,
   ];
 
   for (const pattern of patterns) {

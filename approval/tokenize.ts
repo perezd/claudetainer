@@ -34,8 +34,43 @@ function preserveEnvReference(key: string): string {
   return `$${key}`;
 }
 
+/**
+ * Normalize raw shell-quote output into strict ShellToken shapes.
+ * shell-quote can emit { comment: string } for # comments and
+ * { op: "glob", pattern: string } for unquoted wildcards. Comments
+ * are dropped; globs are converted to their literal pattern string
+ * so path-based deny rules still match (e.g. /tmp/*).
+ */
+function normalizeToken(token: unknown): ShellToken | null {
+  if (typeof token === "string") return token;
+  if (!token || typeof token !== "object") return null;
+
+  // Drop shell comments — not relevant for rule evaluation
+  if ("comment" in token) return null;
+
+  // Convert glob tokens to literal pattern strings so they appear
+  // in args/positionals for deny rule matching
+  const record = token as Record<string, unknown>;
+  if (record.op === "glob" && typeof record.pattern === "string") {
+    return record.pattern;
+  }
+
+  // Known operator tokens
+  if ("op" in token && typeof (token as { op: unknown }).op === "string") {
+    return { op: (token as { op: string }).op };
+  }
+
+  return null;
+}
+
 export function tokenize(line: string): ShellToken[] {
-  return parse(line, preserveEnvReference) as ShellToken[];
+  const raw = parse(line, preserveEnvReference) as unknown[];
+  const tokens: ShellToken[] = [];
+  for (const token of raw) {
+    const normalized = normalizeToken(token);
+    if (normalized !== null) tokens.push(normalized);
+  }
+  return tokens;
 }
 
 export function splitSegments(tokens: ShellToken[]): RawSegment[] {

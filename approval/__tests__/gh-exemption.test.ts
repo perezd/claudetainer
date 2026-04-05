@@ -55,6 +55,10 @@ describe("extractRepoTarget", () => {
     );
     expect(extractRepoTarget(seg)).toEqual({ owner: "owner", repo: "repo" });
   });
+  test("extracts from -R=owner/repo (combined short flag form)", () => {
+    const seg = parseSegment(["gh", "issue", "list", "-R=owner/repo"], false);
+    expect(extractRepoTarget(seg)).toEqual({ owner: "owner", repo: "repo" });
+  });
   test("returns 'implicit' for gh pr create without --repo", () => {
     const seg = parseSegment(["gh", "pr", "create", "--title", "test"], false);
     expect(extractRepoTarget(seg)).toBe("implicit");
