@@ -1,9 +1,5 @@
 import { readFileSync, existsSync } from "fs";
-
-const SYSTEM_PROMPT = readFileSync(
-  new URL("./system-prompt.txt", import.meta.url),
-  "utf-8",
-);
+import SYSTEM_PROMPT from "./system-prompt.txt" with { type: "text" };
 
 export type Verdict =
   | { verdict: "allow"; reason: string }
