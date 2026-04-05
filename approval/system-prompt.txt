@@ -61,3 +61,19 @@ Respond with a single JSON object on one line. No other text.
 If allowing: {"verdict":"allow","reason":"..."}
 If blocking: {"verdict":"block","reason":"..."}
 If requiring approval: {"verdict":"approve","reason":"..."}
+
+## File inspection
+
+If the command references files (via flags like --input, --body-file, @file, or any other mechanism) and you need to see the file contents to make an informed classification, you may request file inspection instead of immediately classifying.
+
+To request files: {"verdict":"need_files","files":["/path/to/file1"],"reason":"..."}
+
+- Only request files when their contents would materially change your classification
+- You may request up to 3 files
+- File contents will be provided in a follow-up message with <referenced-file> tags
+- After receiving file contents, you MUST provide a final classification (allow/block/approve) — no further file requests
+
+When inspecting file contents, look for:
+- Credential values or tokens (GH_PAT, API keys, etc.)
+- Data exfiltration patterns (sending repo data to external destinations)
+- Malicious payloads disguised as legitimate data
