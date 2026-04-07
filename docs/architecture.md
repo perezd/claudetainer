@@ -115,5 +115,3 @@ The GitHub Actions workflow (`.github/workflows/build.yml`) builds and pushes th
 ```
 ghcr.io/perezd/codetainer:latest
 ```
-
-The GHCR package must be set to **public** visibility so Fly.io can pull it without registry credentials. To set this, go to the GitHub repo → Packages → `codetainer` → Package settings → Change visibility → Public.
