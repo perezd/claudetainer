@@ -8,13 +8,13 @@ These are set via `fly secrets set` and are required for the container to start.
 
 ### `GH_PAT` (required)
 
-A [GitHub fine-grained Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token). This authenticates all git operations, the `gh` CLI, and npm access to GitHub Packages.
+A GitHub Personal Access Token that authenticates all git operations, the `gh` CLI, and npm access to GitHub Packages.
 
 This token should be created on the **robot GitHub account** (not your personal account). It acts as the identity boundary for what Claude can do on GitHub — scoped to exactly the repository you want Claude to work in, no broader.
 
-Fine-grained tokens are recommended when the target repo belongs to a GitHub **organization** the robot account is a member of. However, fine-grained tokens have a [known limitation](https://github.com/community/community/discussions/36441): they can only access repos owned by the token creator's own account or by an org they belong to. They **cannot** access repos owned by another user's personal account. If the robot account is a collaborator on a repo owned by someone else's personal account (not an org), you'll need a [classic Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic) instead. Classic tokens must have at minimum the `read:org`, `read:packages`, and `repo` scopes.
+#### Fine-grained token (recommended)
 
-**How to create a fine-grained token (recommended):**
+Use a [fine-grained Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token) when the target repo belongs to a GitHub **organization** the robot account is a member of.
 
 1. Log into the robot GitHub account and go to [github.com/settings/tokens](https://github.com/settings/tokens?type=beta). Click **Generate new token** (fine-grained)
 2. Give it a descriptive name (e.g. `codetainer - my-repo`)
@@ -28,6 +28,22 @@ Fine-grained tokens are recommended when the target repo belongs to a GitHub **o
    - **Metadata**: Read — required by GitHub for all fine-grained tokens
 6. Leave all other permissions at **No access**. Specifically do **not** grant: Administration, Workflows (write), Packages, Pages, Secrets, Environments, or Deployments
 7. Click **Generate token** and copy it immediately (you won't see it again)
+
+#### Classic token (fallback)
+
+Fine-grained tokens have a [known limitation](https://github.com/community/community/discussions/36441): they can only access repos owned by the token creator's own account or by an org they belong to. They **cannot** access repos owned by another user's personal account.
+
+If the robot account is a collaborator on a repo owned by someone else's personal account (not an org), use a [classic Personal Access Token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic) instead.
+
+1. Log into the robot GitHub account and go to [github.com/settings/tokens](https://github.com/settings/tokens). Click **Generate new token** (classic)
+2. Give it a descriptive name (e.g. `codetainer - my-repo`)
+3. Grant exactly these scopes:
+   - `repo` — full repository access (clone, commit, push, PRs, issues)
+   - `read:org` — read organization membership
+   - `read:packages` — read GitHub Packages (npm registry)
+4. Click **Generate token** and copy it immediately (you won't see it again)
+
+#### Set the secret
 
 ```bash
 fly secrets set GH_PAT=ghp_xxxxxxxxxxxx -a <your-app-name>
