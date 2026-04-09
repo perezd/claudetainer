@@ -22,12 +22,12 @@ chmod 1777 /tmp
 
 # Set ownership and create subdirectories
 chown claude:claude /workspace /home/claude
-mkdir -p /home/claude/.cache /home/claude/.claude /home/claude/.local/bin /home/claude/.bun/bin
+mkdir -p /home/claude/.cache /home/claude/.claude /home/claude/.local/bin /home/claude/.bun/bin /home/claude/go/bin
 chown -R claude:claude /home/claude/.cache /home/claude/.claude /home/claude/.local /home/claude/.bun
 
 # Shell prompt: path relative to repo root + git branch
 cat > /home/claude/.bashrc <<'BASHRC'
-export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH:$HOME/go/bin:/usr/local/go/bin"
 
 __ps1_path() {
   local git_root
