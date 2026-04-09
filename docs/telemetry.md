@@ -53,7 +53,7 @@ All events from a single user prompt share a `prompt.id` for correlation.
 
 - Distributed tracing links each user prompt to the API requests and tool executions it triggers, viewable as a single trace in Grafana
 - Auto-enabled alongside metrics and logs when Grafana Cloud credentials are configured
-- Spans redact user prompt text and tool content by default (controlled by the same privacy settings below)
+- Span content fidelity is controlled by the same privacy settings described below
 
 When tracing is active, Bash subprocesses automatically inherit a `TRACEPARENT` environment variable containing the W3C trace context of the active tool execution span. This lets any subprocess that reads `TRACEPARENT` parent its own spans under the same trace, enabling end-to-end distributed tracing through scripts and commands that Claude runs.
 
