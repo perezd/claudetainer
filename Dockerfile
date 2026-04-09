@@ -38,14 +38,14 @@ RUN ARCH=$(dpkg --print-architecture) \
     && dpkg -i /tmp/glow.deb \
     && rm /tmp/glow.deb
 
-# Go 1.26.1 (with checksum verification)
+# Go 1.26.2 (with checksum verification)
 RUN ARCH=$(dpkg --print-architecture) \
     && if [ "$ARCH" = "amd64" ]; then \
-         GO_SHA256="PLACEHOLDER_amd64_sha256_go1.26.1_linux"; \
+         GO_SHA256="990e6b4bbba816dc3ee129eaeaf4b42f17c2800b88a2166c265ac1a200262282"; \
        elif [ "$ARCH" = "arm64" ]; then \
-         GO_SHA256="PLACEHOLDER_arm64_sha256_go1.26.1_linux"; \
+         GO_SHA256="c958a1fe1b361391db163a485e21f5f228142d6f8b584f6bef89b26f66dc5b23"; \
        else echo "Unsupported arch: $ARCH" >&2; exit 1; fi \
-    && curl -fsSL "https://go.dev/dl/go1.26.1.linux-${ARCH}.tar.gz" -o /tmp/go.tar.gz \
+    && curl -fsSL "https://go.dev/dl/go1.26.2.linux-${ARCH}.tar.gz" -o /tmp/go.tar.gz \
     && echo "${GO_SHA256}  /tmp/go.tar.gz" | sha256sum --check \
     && tar -xz -C /usr/local < /tmp/go.tar.gz \
     && rm /tmp/go.tar.gz
