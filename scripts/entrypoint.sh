@@ -27,8 +27,8 @@ chown -R claude:claude /home/claude/.cache /home/claude/.claude /home/claude/.lo
 
 # Shell prompt: path relative to repo root + git branch
 cat > /home/claude/.bashrc <<'BASHRC'
-export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH:/usr/local/go/bin:$HOME/go/bin"
 export GOPATH="${GOPATH:-$HOME/go}"
+export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH:/usr/local/go/bin:$GOPATH/bin"
 export GOPROXY="${GOPROXY:-https://proxy.golang.org,off}"
 export GONOSUMDB="${GONOSUMDB-}"
 export GOFLAGS="${GOFLAGS-}"
