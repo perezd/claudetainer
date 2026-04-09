@@ -207,6 +207,8 @@ OTEL_TRACES_EXPORTER=otlp
 OTEL_LOG_TOOL_CONTENT=${OTEL_LOG_TOOL_DETAILS:-1}
 OTELENV
   )
+  # OTEL_LOG_TOOL_CONTENT intentionally mirrors OTEL_LOG_TOOL_DETAILS —
+  # one operator knob controls tool content visibility across log events and trace spans
   # Append resource attributes as a separate line (only if non-empty)
   if [[ -n "$OTEL_ATTRS" ]]; then
     echo "OTEL_RESOURCE_ATTRIBUTES=${OTEL_ATTRS}" >> /tmp/otel/otel-env
