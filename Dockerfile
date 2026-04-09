@@ -38,6 +38,18 @@ RUN ARCH=$(dpkg --print-architecture) \
     && dpkg -i /tmp/glow.deb \
     && rm /tmp/glow.deb
 
+# Go 1.26.1 (with checksum verification)
+RUN ARCH=$(dpkg --print-architecture) \
+    && if [ "$ARCH" = "amd64" ]; then \
+         GO_SHA256="PLACEHOLDER_amd64_sha256_go1.26.1_linux"; \
+       elif [ "$ARCH" = "arm64" ]; then \
+         GO_SHA256="PLACEHOLDER_arm64_sha256_go1.26.1_linux"; \
+       else echo "Unsupported arch: $ARCH" >&2; exit 1; fi \
+    && curl -fsSL "https://go.dev/dl/go1.26.1.linux-${ARCH}.tar.gz" -o /tmp/go.tar.gz \
+    && echo "${GO_SHA256}  /tmp/go.tar.gz" | sha256sum --check \
+    && tar -xz -C /usr/local < /tmp/go.tar.gz \
+    && rm /tmp/go.tar.gz
+
 # gh CLI
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
