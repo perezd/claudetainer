@@ -24,10 +24,10 @@ run_as_claude() {
     CODETAINER_NPM_TOKEN="$GH_PAT" \
     CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
     GOPATH="$CLAUDE_HOME/go" \
-    GOPROXY="$GOPROXY" \
-    GONOSUMDB="$GONOSUMDB" \
-    GOFLAGS="$GOFLAGS" \
-    GOTELEMETRY="$GOTELEMETRY" \
+    GOPROXY="${GOPROXY:-https://proxy.golang.org,off}" \
+    GONOSUMDB="${GONOSUMDB-}" \
+    GOFLAGS="${GOFLAGS-}" \
+    GOTELEMETRY="${GOTELEMETRY:-off}" \
     LANG="$LANG" \
     LC_ALL="$LC_ALL" \
     "${OTEL_ENV_ARGS[@]}" \
@@ -153,10 +153,10 @@ sudo -u claude \
   CODETAINER_NPM_TOKEN="$GH_PAT" \
   CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
   GOPATH="$CLAUDE_HOME/go" \
-  GOPROXY="$GOPROXY" \
-  GONOSUMDB="$GONOSUMDB" \
-  GOFLAGS="$GOFLAGS" \
-  GOTELEMETRY="$GOTELEMETRY" \
+  GOPROXY="${GOPROXY:-https://proxy.golang.org,off}" \
+  GONOSUMDB="${GONOSUMDB-}" \
+  GOFLAGS="${GOFLAGS-}" \
+  GOTELEMETRY="${GOTELEMETRY:-off}" \
   COLORTERM="truecolor" \
   LANG="$LANG" \
   LC_ALL="$LC_ALL" \
@@ -172,10 +172,10 @@ sudo -u claude \
   GH_TOKEN="$GH_PAT" \
   CODETAINER_NPM_TOKEN="$GH_PAT" \
   GOPATH="$CLAUDE_HOME/go" \
-  GOPROXY="$GOPROXY" \
-  GONOSUMDB="$GONOSUMDB" \
-  GOFLAGS="$GOFLAGS" \
-  GOTELEMETRY="$GOTELEMETRY" \
+  GOPROXY="${GOPROXY:-https://proxy.golang.org,off}" \
+  GONOSUMDB="${GONOSUMDB-}" \
+  GOFLAGS="${GOFLAGS-}" \
+  GOTELEMETRY="${GOTELEMETRY:-off}" \
   COLORTERM="truecolor" \
   LANG="$LANG" \
   LC_ALL="$LC_ALL" \
