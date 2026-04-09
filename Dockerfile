@@ -95,7 +95,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && npm install -g typescript typescript-language-server
 
 # gopls v0.18.1 (Go language server — pinned version)
-RUN GOBIN=/usr/local/go/bin GOPATH=/tmp/gobuild go install golang.org/x/tools/gopls@v0.18.1 \
+RUN GOBIN=/usr/local/go/bin GOPATH=/tmp/gobuild GOCACHE=/tmp/gobuild/cache go install golang.org/x/tools/gopls@v0.18.1 \
     && rm -rf /tmp/gobuild
 
 # Cache-bust: everything below fetches "latest" and must be fresh each build.
