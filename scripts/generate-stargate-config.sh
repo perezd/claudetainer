@@ -55,7 +55,7 @@ sed -i "s|^allowed_domains = .*|allowed_domains = ${ALLOWED_DOMAINS}|" "$STARGAT
 
 # === 8. Append targeted RED rule for credential file ===
 # Insert before the "# === GREEN Rules" section marker, which immediately follows the last RED rule.
-GREEN_LINE=$(grep -n '# === GREEN Rules' "$STARGATE_CONFIG" | head -1 | cut -d: -f1)
+GREEN_LINE=$(grep -n '# === GREEN Rules' "$STARGATE_CONFIG" | head -1 | cut -d: -f1 || true)
 if [[ -z "$GREEN_LINE" ]]; then
     echo "[STARGATE] ERROR: '# === GREEN Rules' marker not found in config — cannot insert credential protection rule" >&2
     exit 1
