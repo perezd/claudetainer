@@ -216,11 +216,57 @@ OTELENV
   echo "[ENTRYPOINT] OTEL telemetry enabled → host=${GRAFANA_HOST}"
 fi
 
-# === 4. Claude Code setup ===
+# === 4a. Command Control (Stargate) ===
+echo "[ENTRYPOINT] Configuring Stargate..."
+export STARGATE_CONFIG=/opt/stargate/stargate.toml
+/usr/local/bin/generate-stargate-config.sh
 
-# Copy settings template — claude can delete and recreate this file
 cp /opt/claude/settings.json /home/claude/.claude/settings.json
 chown claude:claude /home/claude/.claude/settings.json
+
+STARGATE_ENV_ARGS=()
+if [[ -n "${GRAFANA_INSTANCE_ID:-}" && -n "${GRAFANA_API_TOKEN:-}" && -n "${GRAFANA_OTLP_ENDPOINT:-}" ]]; then
+    STARGATE_ENV_ARGS+=(STARGATE_OTEL_USERNAME="$GRAFANA_INSTANCE_ID")
+    STARGATE_ENV_ARGS+=(STARGATE_OTEL_PASSWORD="$GRAFANA_API_TOKEN")
+fi
+
+(set +eo pipefail; while true; do
+    start_time=$(date +%s)
+    sudo -u claude env \
+      HOME="/home/claude" \
+      PATH="/home/claude/.local/bin:/home/claude/.bun/bin:/usr/local/bin:/usr/bin:/bin" \
+      LANG="${LANG:-en_US.UTF-8}" \
+      LC_ALL="${LC_ALL:-en_US.UTF-8}" \
+      "${STARGATE_ENV_ARGS[@]}" \
+      STARGATE_CONFIG="$STARGATE_CONFIG" \
+      CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
+      /usr/local/bin/stargate serve 2>&1 | \
+      while IFS= read -r line; do echo "[STARGATE] $line"; done
+    elapsed=$(( $(date +%s) - start_time ))
+    if [[ $elapsed -lt 5 ]]; then
+        echo "[ENTRYPOINT] Stargate exited quickly (${elapsed}s), sleeping 5s..." >&2
+        sleep 5
+    else
+        echo "[ENTRYPOINT] Stargate exited, restarting in 1s..." >&2
+        sleep 1
+    fi
+done) &
+echo "[ENTRYPOINT] Stargate started (loop PID $!)"
+
+STARGATE_READY=false
+for i in $(seq 1 30); do
+    if curl -sf http://127.0.0.1:9099/health > /dev/null 2>&1; then
+        echo "[ENTRYPOINT] Stargate ready"
+        STARGATE_READY=true
+        break
+    fi
+    sleep 0.2
+done
+if [[ "$STARGATE_READY" != "true" ]]; then
+    echo "[ENTRYPOINT] WARN: Stargate did not become ready within 6s" >&2
+fi
+
+# === 4. Claude Code setup ===
 
 # Write Claude Code state (onboarding skip + project trust written after clone below)
 echo '{"hasCompletedOnboarding": true}' > /home/claude/.claude.json
@@ -327,6 +373,12 @@ RULE_COUNT=$(iptables -L OUTPUT -n 2>/dev/null | grep -c ACCEPT || echo 0)
 if [[ "$RULE_COUNT" -lt 5 ]]; then
   echo "[ENTRYPOINT] WARN: iptables has only $RULE_COUNT ACCEPT rules" >&2
   READY=false
+fi
+
+# Stargate must be healthy
+if ! curl -sf http://127.0.0.1:9099/health > /dev/null 2>&1; then
+    echo "[ENTRYPOINT] WARN: Stargate not healthy" >&2
+    READY=false
 fi
 
 # Settings must be present

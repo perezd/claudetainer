@@ -30,6 +30,7 @@ run_as_claude() {
     GOTELEMETRY="${GOTELEMETRY:-off}" \
     LANG="$LANG" \
     LC_ALL="$LC_ALL" \
+    STARGATE_CONFIG="${STARGATE_CONFIG:-}" \
     "${OTEL_ENV_ARGS[@]}" \
     "$@"
 }
@@ -160,6 +161,7 @@ sudo -u claude \
   COLORTERM="truecolor" \
   LANG="$LANG" \
   LC_ALL="$LC_ALL" \
+  STARGATE_CONFIG="${STARGATE_CONFIG:-}" \
   "${OTEL_ENV_ARGS[@]}" \
   tmux -f /tmp/.tmux.conf new-session -d -s claude \
     -c "$WORK_DIR" \
@@ -179,6 +181,7 @@ sudo -u claude \
   COLORTERM="truecolor" \
   LANG="$LANG" \
   LC_ALL="$LC_ALL" \
+  STARGATE_CONFIG="${STARGATE_CONFIG:-}" \
   "${OTEL_ENV_ARGS[@]}" \
   tmux -S "$TMUX_SOCKET" split-window -t claude -v -l 20% -c "$WORK_DIR" "bash --login -i"
 

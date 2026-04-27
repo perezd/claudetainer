@@ -4,6 +4,16 @@
   "hooks": {
     "PreToolUse": [
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/local/bin/stargate hook --agent claude-code --event pre-tool-use",
+            "timeout": 30000
+          }
+        ]
+      },
+      {
         "matcher": "EnterWorktree",
         "hooks": [
           {
@@ -22,6 +32,18 @@
             "type": "command",
             "command": "/opt/claude/sync-fork.sh",
             "timeout": 30000
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/local/bin/stargate hook --agent claude-code --event post-tool-use",
+            "timeout": 10000
           }
         ]
       }
