@@ -21,9 +21,7 @@ mount -t tmpfs -o size=1024m tmpfs /home/claude
 chmod 1777 /tmp
 
 # Set ownership and create subdirectories
-chown claude:claude /workspace
-chown root:claude /home/claude
-chmod 1775 /home/claude
+chown claude:claude /workspace /home/claude
 mkdir -p /home/claude/.cache /home/claude/.claude /home/claude/.local/bin /home/claude/.bun/bin
 chown -R claude:claude /home/claude/.cache /home/claude/.claude /home/claude/.local /home/claude/.bun
 
@@ -213,22 +211,8 @@ echo "[ENTRYPOINT] Configuring Stargate..."
 export STARGATE_CONFIG=/opt/stargate/stargate.toml
 /usr/local/bin/generate-stargate-config.sh
 
-# Lock settings and .claude/ directory BEFORE starting any claude-user process.
-# Prevents TOCTOU: a claude process could pre-create a symlink at the settings
-# path before root copies to it.
 cp /opt/claude/settings.json /home/claude/.claude/settings.json
-chmod 444 /home/claude/.claude/settings.json
-chown root:root /home/claude/.claude
-chmod 755 /home/claude/.claude
-
-# Pre-create writable subdirectories for Claude Code runtime state.
-# The parent .claude/ is root-owned (755) so claude cannot create new
-# top-level entries, but these subdirs are claude-owned for plugin
-# state, caches, sessions, etc.
-for subdir in plugins cache projects sessions statsig telemetry todos tasks plans; do
-    mkdir -p "/home/claude/.claude/$subdir"
-    chown claude:claude "/home/claude/.claude/$subdir"
-done
+chown claude:claude /home/claude/.claude/settings.json
 
 STARGATE_ENV_ARGS=()
 if [[ -n "${GRAFANA_INSTANCE_ID:-}" && -n "${GRAFANA_API_TOKEN:-}" && -n "${GRAFANA_OTLP_ENDPOINT:-}" ]]; then

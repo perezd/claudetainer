@@ -100,7 +100,7 @@ All scripts live in `scripts/` and are copied to `/usr/local/bin/` during the Do
 
 /home/claude/            # tmpfs, 1GB — claude user home
 ├── .claude/
-│   └── settings.json    # Hook config (root:root 444, immutable — /home/claude is root:claude 1775, .claude/ is root:root 755)
+│   └── settings.json    # Hook config (claude-owned, deletable — accepted risk)
 ├── .claude.json         # Onboarding bypass
 ├── .npmrc               # GitHub Packages auth
 ├── .local/bin/claude    # Symlink → /usr/local/bin/claude
