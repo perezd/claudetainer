@@ -351,8 +351,7 @@ cat > /home/claude/.claude.json <<EOF
   "hasCompletedOnboarding": true,
   "projects": {
     "$WORK_DIR": {
-      "hasTrustDialogAccepted": true,
-      "allowedTools": []
+      "hasTrustDialogAccepted": true
     }
   }
 }
