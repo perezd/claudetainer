@@ -12,11 +12,11 @@ mkdir -p /opt/stargate && chmod 755 /opt/stargate
 # === 3. Symlink guard ===
 [[ -L "$STARGATE_CONFIG" ]] && rm -f "$STARGATE_CONFIG"
 
-# === 4. Initialize directories, then install static template ===
-# stargate init creates corpus/trace directories and validates paths.
-/usr/local/bin/stargate --config "$STARGATE_CONFIG" init
-# Overwrite the generated config with the static template from the repo.
+# === 4. Install static template, then initialize directories ===
+# Copy template first so stargate init validates OUR config (not the embedded default)
+# and creates corpus/trace directories based on our settings.
 cp /opt/stargate/stargate.toml.template "$STARGATE_CONFIG"
+/usr/local/bin/stargate --config "$STARGATE_CONFIG" init
 
 # === 5. Extract GitHub owner from REPO_URL ===
 GITHUB_OWNER=""
@@ -60,7 +60,7 @@ if [[ -n "${GRAFANA_INSTANCE_ID:-}" ]] && [[ -n "${GRAFANA_API_TOKEN:-}" ]] && [
     sed -i '/^\[telemetry\]/,/^$/{
         s|^enabled = .*|enabled = true|
     }' "$STARGATE_CONFIG"
-    # Add endpoint line after enabled
+    # Add endpoint line after [telemetry] header (before enabled)
     sed -i "/^\[telemetry\]/a endpoint = \"${GRAFANA_OTLP_ENDPOINT}\"" "$STARGATE_CONFIG"
 fi
 
