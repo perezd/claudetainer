@@ -221,6 +221,15 @@ chmod 444 /home/claude/.claude/settings.json
 chown root:root /home/claude/.claude
 chmod 755 /home/claude/.claude
 
+# Pre-create writable subdirectories for Claude Code runtime state.
+# The parent .claude/ is root-owned (755) so claude cannot create new
+# top-level entries, but these subdirs are claude-owned for plugin
+# state, caches, sessions, etc.
+for subdir in plugins cache projects sessions statsig telemetry todos tasks plans; do
+    mkdir -p "/home/claude/.claude/$subdir"
+    chown claude:claude "/home/claude/.claude/$subdir"
+done
+
 STARGATE_ENV_ARGS=()
 if [[ -n "${GRAFANA_INSTANCE_ID:-}" && -n "${GRAFANA_API_TOKEN:-}" && -n "${GRAFANA_OTLP_ENDPOINT:-}" ]]; then
     STARGATE_ENV_ARGS+=(STARGATE_OTEL_USERNAME="$GRAFANA_INSTANCE_ID")
