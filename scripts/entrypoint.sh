@@ -211,13 +211,21 @@ echo "[ENTRYPOINT] Configuring Stargate..."
 export STARGATE_CONFIG=/opt/stargate/stargate.toml
 /usr/local/bin/generate-stargate-config.sh
 
+# Lock settings and .claude/ directory BEFORE starting any claude-user process.
+# Prevents TOCTOU: a claude process could pre-create a symlink at the settings
+# path before root copies to it.
+cp /opt/claude/settings.json /home/claude/.claude/settings.json
+chmod 444 /home/claude/.claude/settings.json
+chown root:root /home/claude/.claude
+chmod 755 /home/claude/.claude
+
 STARGATE_ENV_ARGS=()
 if [[ -n "${GRAFANA_INSTANCE_ID:-}" && -n "${GRAFANA_API_TOKEN:-}" && -n "${GRAFANA_OTLP_ENDPOINT:-}" ]]; then
     STARGATE_ENV_ARGS+=(STARGATE_OTEL_USERNAME="$GRAFANA_INSTANCE_ID")
     STARGATE_ENV_ARGS+=(STARGATE_OTEL_PASSWORD="$GRAFANA_API_TOKEN")
 fi
 
-(while true; do
+(set +eo pipefail; while true; do
     start_time=$(date +%s)
     sudo -u claude env "${STARGATE_ENV_ARGS[@]}" \
       STARGATE_CONFIG="$STARGATE_CONFIG" \
@@ -249,12 +257,6 @@ if [[ "$STARGATE_READY" != "true" ]]; then
 fi
 
 # === 4. Claude Code setup ===
-
-# Copy settings template — locked read-only, root-owned parent prevents unlink+recreate
-cp /opt/claude/settings.json /home/claude/.claude/settings.json
-chmod 444 /home/claude/.claude/settings.json
-chown root:root /home/claude/.claude
-chmod 755 /home/claude/.claude
 
 # Write Claude Code state (onboarding skip + project trust written after clone below)
 echo '{"hasCompletedOnboarding": true}' > /home/claude/.claude.json

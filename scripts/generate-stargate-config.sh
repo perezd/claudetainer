@@ -19,7 +19,12 @@ mkdir -p /opt/stargate && chmod 755 /opt/stargate
 # === 5. Extract GitHub owner from REPO_URL ===
 GITHUB_OWNER=""
 if [[ -n "${REPO_URL:-}" ]]; then
-    GITHUB_OWNER=$(echo "$REPO_URL" | sed -n 's|.*github\.com[:/]\([^/]*\)/.*|\1|p')
+    _extracted=$(echo "$REPO_URL" | sed -n 's|.*github\.com[:/]\([^/]*\)/.*|\1|p')
+    if [[ "$_extracted" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]*$ ]]; then
+        GITHUB_OWNER="$_extracted"
+    else
+        echo "[STARGATE] WARN: REPO_URL owner failed validation, using empty github_owners (fail-closed)" >&2
+    fi
 fi
 
 # === 6. Build allowed_domains from domains.conf ===
@@ -50,14 +55,16 @@ sed -i "s|^allowed_domains = .*|allowed_domains = ${ALLOWED_DOMAINS}|" "$STARGAT
 # === 8. Append targeted RED rule for credential file ===
 # Insert before the "# === GREEN Rules" section marker, which immediately follows the last RED rule.
 GREEN_LINE=$(grep -n '# === GREEN Rules' "$STARGATE_CONFIG" | head -1 | cut -d: -f1)
-if [[ -n "$GREEN_LINE" ]]; then
-    sed -i "${GREEN_LINE}i\\
+if [[ -z "$GREEN_LINE" ]]; then
+    echo "[STARGATE] ERROR: '# === GREEN Rules' marker not found in config — cannot insert credential protection rule" >&2
+    exit 1
+fi
+sed -i "${GREEN_LINE}i\\
 \\
 [[rules.red]]\\
 command = \"cat\"\\
 args = [\"/opt/gh-config/.ghtoken\", \"/opt/gh-config/*\"]\\
 reason = \"Direct read of credential file.\"" "$STARGATE_CONFIG"
-fi
 
 # === 9. Patch [telemetry] section ===
 if [[ -n "${GRAFANA_INSTANCE_ID:-}" ]] && [[ -n "${GRAFANA_API_TOKEN:-}" ]] && [[ -n "${GRAFANA_OTLP_ENDPOINT:-}" ]]; then
