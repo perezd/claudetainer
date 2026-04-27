@@ -31,10 +31,11 @@ fi
 ALLOWED_DOMAINS="["
 first=true
 while IFS= read -r line || [[ -n "$line" ]]; do
-    # Strip comments and blank lines
-    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    line="${line%%#*}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
     [[ -z "$line" ]] && continue
-    domain=$(echo "$line" | tr -d '[:space:]')
+    domain="$line"
     if [[ "$first" == "true" ]]; then
         ALLOWED_DOMAINS+="\"${domain}\""
         first=false

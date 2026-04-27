@@ -229,7 +229,12 @@ fi
 
 (set +eo pipefail; while true; do
     start_time=$(date +%s)
-    sudo -u claude env "${STARGATE_ENV_ARGS[@]}" \
+    sudo -u claude env \
+      HOME="/home/claude" \
+      PATH="/home/claude/.local/bin:/home/claude/.bun/bin:/usr/local/bin:/usr/bin:/bin" \
+      LANG="${LANG:-en_US.UTF-8}" \
+      LC_ALL="${LC_ALL:-en_US.UTF-8}" \
+      "${STARGATE_ENV_ARGS[@]}" \
       STARGATE_CONFIG="$STARGATE_CONFIG" \
       CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
       /usr/local/bin/stargate serve 2>&1 | \
