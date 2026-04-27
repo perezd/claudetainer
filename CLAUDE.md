@@ -128,11 +128,9 @@ This must be done after each upstream merge to keep the fork and local checkout 
 
 ### PR Lifecycle
 
-After creating a PR, poll periodically for comments and review feedback. Address reviewer comments, push updates, and re-request review as needed. Continue polling until the PR is approved and merged, or closed. Never abandon a PR — see it through to resolution.
+After creating a PR, invoke `/copilot-review` to run the automated Copilot review loop. For human reviewer feedback, use `/receiving-code-review` before implementing suggestions. Never abandon a PR — see it through to resolution.
 
 After every push to a PR branch, review the current PR description (summary, layer-impact assessment, security design checklist, test plan) against the totality of changes in the PR. If any section no longer accurately reflects the implementation, update the PR description in the same operation — do not defer description updates to a later step.
-
-When receiving PR review feedback, always use `/receiving-code-review` before implementing suggestions.
 
 ### Conventional Commits
 
@@ -176,6 +174,7 @@ Container builds are manual. Never build or push Docker images.
 
 - `network/` — Network isolation (domain allowlist, CoreDNS config, iptables refresh).
 - `scripts/` — Runtime scripts (entrypoint/PID 1, SSH handler, session namer, status line).
+- `skills/` — User-scoped Claude Code skills (copied to `/home/claude/.claude/skills/` at boot).
 - `Dockerfile` — Multi-stage container build (Debian bookworm-slim).
 - `claude-settings.json` — Claude Code runtime config (model, hooks, plugins, status line).
 
@@ -226,8 +225,9 @@ These superpowers skills are mandatory process gates — not optional.
 | About to claim work is complete, fixed, or passing                       | `/verification-before-completion` |
 | Implementation is complete and ready to integrate                        | `/finishing-a-development-branch` |
 | Completing a task or major feature                                       | `/requesting-code-review`         |
+| After creating a PR                                                      | `/copilot-review`                 |
 
-**Workflow order:** `/brainstorming` → `/writing-plans` → `/executing-plans` → `/verification-before-completion` → `/requesting-code-review` or `/finishing-a-development-branch`.
+**Workflow order:** `/brainstorming` → `/writing-plans` → `/executing-plans` → `/verification-before-completion` → `/finishing-a-development-branch` → `/copilot-review`.
 
 `/systematic-debugging` and `/receiving-code-review` are reactive — invoke when their triggers occur at any point.
 
