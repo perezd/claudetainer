@@ -33,7 +33,6 @@ for (( i=1; i<=MAX_POLLS; i++ )); do
   fi
 
   REVIEWS=$(gh api "repos/${OWNER_REPO}/pulls/${PR_NUMBER}/reviews" \
-    --paginate \
     --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer[bot]")] | sort_by(.id) | last | "\(.id)\t\(.body)"' \
     2>"$STDERR_FILE") || {
       STDERR=$(cat "$STDERR_FILE" 2>/dev/null)
@@ -62,6 +61,8 @@ for (( i=1; i<=MAX_POLLS; i++ )); do
   [[ -z "$REVIEW_ID" || "$REVIEW_ID" == "null" ]] && continue
   [[ "$REVIEW_ID" == "$STALE_REVIEW_ID" ]] && continue
 
+  # Thread count includes all reviewers, not just Copilot — by design, since the
+  # skill runs before human review and should address all unresolved threads.
   THREAD_COUNT=$(gh api graphql -f query='
     query($owner: String!, $repo: String!, $pr: Int!) {
       repository(owner: $owner, name: $repo) {

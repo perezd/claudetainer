@@ -227,7 +227,7 @@ These superpowers skills are mandatory process gates — not optional.
 | Completing a task or major feature                                       | `/requesting-code-review`         |
 | After creating a PR                                                      | `/copilot-review`                 |
 
-**Workflow order:** `/brainstorming` → `/writing-plans` → `/executing-plans` → `/verification-before-completion` → `/finishing-a-development-branch` → `/copilot-review`.
+**Workflow order:** `/brainstorming` → `/writing-plans` → `/executing-plans` → `/verification-before-completion` → `/requesting-code-review` → `/finishing-a-development-branch` → `/copilot-review`.
 
 `/systematic-debugging` and `/receiving-code-review` are reactive — invoke when their triggers occur at any point.
 
