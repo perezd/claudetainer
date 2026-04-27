@@ -16,17 +16,17 @@ operator-defined scopes that live outside the guarded repository.
 
 ## Decisions
 
-| Decision | Choice | Rationale |
-| --- | --- | --- |
-| Binary source | GitHub release download (pinned version, SHA256 verified) | Matches CoreDNS pattern; integrity verification for security-critical binary |
-| LLM review | Enabled via `CLAUDE_CODE_OAUTH_TOKEN` | No new secrets; covers autonomous `CLAUDE_PROMPT` mode |
-| `github_owners` scope | Auto-derived from `REPO_URL` | Covers common case; fail-closed (empty) when unset |
-| `allowed_domains` scope | Mirror `network/domains.conf` | Network layer is the enforcement boundary; avoid double-gating |
-| Telemetry | Piggyback on existing Grafana OTLP config via env vars | Unified observability; credentials never written to config file |
-| Rule adjustments | Add targeted RED rule for token file path | Prevents `sudo cat .ghtoken` from being GREEN after wrapper stripping |
-| Server privilege | De-privileged to `claude` user | Principle of least privilege; untrusted input parsing should not run as root |
-| Config ownership | Root-owned, read-only (`root:root 444`) | Immutable trust anchor; eliminates config tampering attack vector |
-| Settings ownership | Root-owned, read-only (`root:root 444`) | Immutable hook configuration; prevents hook removal bypass |
+| Decision                | Choice                                                    | Rationale                                                                    |
+| ----------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Binary source           | GitHub release download (pinned version, SHA256 verified) | Matches CoreDNS pattern; integrity verification for security-critical binary |
+| LLM review              | Enabled via `CLAUDE_CODE_OAUTH_TOKEN`                     | No new secrets; covers autonomous `CLAUDE_PROMPT` mode                       |
+| `github_owners` scope   | Auto-derived from `REPO_URL`                              | Covers common case; fail-closed (empty) when unset                           |
+| `allowed_domains` scope | Mirror `network/domains.conf`                             | Network layer is the enforcement boundary; avoid double-gating               |
+| Telemetry               | Piggyback on existing Grafana OTLP config via env vars    | Unified observability; credentials never written to config file              |
+| Rule adjustments        | Add targeted RED rule for token file path                 | Prevents `sudo cat .ghtoken` from being GREEN after wrapper stripping        |
+| Server privilege        | De-privileged to `claude` user                            | Principle of least privilege; untrusted input parsing should not run as root |
+| Config ownership        | Root-owned, read-only (`root:root 444`)                   | Immutable trust anchor; eliminates config tampering attack vector            |
+| Settings ownership      | Root-owned, read-only (`root:root 444`)                   | Immutable hook configuration; prevents hook removal bypass                   |
 
 ## Architecture
 
@@ -309,8 +309,8 @@ a root-owned, non-writable directory.
 
 - Update the Command Control row in the security framework table:
 
-  | Layer | Defense | Key Files |
-  | --- | --- | --- |
+  | Layer           | Defense                                                                               | Key Files                                                                                      |
+  | --------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
   | Command Control | Stargate: AST-based classification, scope-bound trust, LLM review for YELLOW commands | `scripts/generate-stargate-config.sh`, `scripts/entrypoint.sh`, `claude-settings.json` (hooks) |
 
 - Update the Boot Sequence section to include the new Phase 4 (Command Control)
@@ -347,14 +347,14 @@ a root-owned, non-writable directory.
 
 ## Change Manifest
 
-| File | Change |
-| --- | --- |
-| `Dockerfile` | Add stargate binary download with version pin + SHA256 (~5 lines, after CoreDNS) |
-| `scripts/generate-stargate-config.sh` | **New file.** Config generation from env vars and domain allowlist, writes to `/opt/stargate/` |
-| `scripts/entrypoint.sh` | Add Phase 4: config generation, de-privileged server start with fast-exit detection, health check with warning, readiness integration (~30 lines). Lock settings.json and `.claude/` directory permissions. |
-| `claude-settings.json` | Add PreToolUse and PostToolUse hooks for Bash tool |
-| `CLAUDE.md` | Update Command Control row in security framework table; renumber boot sequence phases |
-| `docs/accepted-risks.md` | Update three existing entries with Stargate as compensating control |
+| File                                  | Change                                                                                                                                                                                                      |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Dockerfile`                          | Add stargate binary download with version pin + SHA256 (~5 lines, after CoreDNS)                                                                                                                            |
+| `scripts/generate-stargate-config.sh` | **New file.** Config generation from env vars and domain allowlist, writes to `/opt/stargate/`                                                                                                              |
+| `scripts/entrypoint.sh`               | Add Phase 4: config generation, de-privileged server start with fast-exit detection, health check with warning, readiness integration (~30 lines). Lock settings.json and `.claude/` directory permissions. |
+| `claude-settings.json`                | Add PreToolUse and PostToolUse hooks for Bash tool                                                                                                                                                          |
+| `CLAUDE.md`                           | Update Command Control row in security framework table; renumber boot sequence phases                                                                                                                       |
+| `docs/accepted-risks.md`              | Update three existing entries with Stargate as compensating control                                                                                                                                         |
 
 **Not changed:** `network/domains.conf`, `start-claude.sh`, `attach-claude.sh`,
 `refresh-iptables.sh`, existing hooks (SessionStart, Stop), existing scripts.
@@ -405,6 +405,7 @@ must not be expanded independently — the network layer is the enforcement
 boundary.
 
 **Fail mode:** Fail-closed at every level:
+
 - Unreachable server: hook adapter exits with code 2 (`claudecode.go:191-192`),
   Claude Code blocks the tool use.
 - Server crash: auto-restart loop with fast-exit detection. Commands blocked

@@ -15,6 +15,7 @@
 ### Task 1: Dockerfile changes — binary and script COPY
 
 **Files:**
+
 - Modify: `Dockerfile:55-59` (insert after CoreDNS block)
 - Modify: `Dockerfile:107-110` (insert in scripts section)
 
@@ -63,6 +64,7 @@ git commit -m "feat(docker): add stargate binary and config generation script"
 ### Task 2: Add Claude Code hooks to claude-settings.json
 
 **Files:**
+
 - Modify: `claude-settings.json`
 
 Add PreToolUse (Bash matcher) and PostToolUse (Bash matcher) hooks for Stargate. The PreToolUse Bash hook goes before the existing EnterWorktree hook. PostToolUse is a new hook event section.
@@ -127,6 +129,7 @@ git commit -m "feat(hooks): add stargate PreToolUse and PostToolUse hooks for Ba
 ### Task 3: Create config generation script
 
 **Files:**
+
 - Create: `scripts/generate-stargate-config.sh`
 
 This script runs as root at boot, generates `/opt/stargate/stargate.toml` from environment variables and the domain allowlist, and locks it down with `root:root 444`.
@@ -174,6 +177,7 @@ git commit -m "feat(stargate): add config generation script for boot-time TOML g
 ### Task 4: Pass STARGATE_CONFIG through start-claude.sh
 
 **Files:**
+
 - Modify: `scripts/start-claude.sh:19-29` (run_as_claude helper)
 - Modify: `scripts/start-claude.sh:142-154` (tmux session creation)
 - Modify: `scripts/start-claude.sh:157-164` (terminal pane creation)
@@ -251,6 +255,7 @@ git commit -m "feat(start-claude): pass STARGATE_CONFIG to tmux session environm
 ### Task 5: Integrate Stargate into entrypoint.sh boot sequence
 
 **Files:**
+
 - Modify: `scripts/entrypoint.sh`
 
 This is the core integration: config generation, de-privileged server start with auto-restart, health check, settings immutability, and readiness gate.
@@ -310,12 +315,14 @@ fi
 In the Claude Code setup section (currently `=== 4. Claude Code setup ===`, line 209), replace the settings copy block (lines 211-213):
 
 **Replace:**
+
 ```bash
 cp /opt/claude/settings.json /home/claude/.claude/settings.json
 chown claude:claude /home/claude/.claude/settings.json
 ```
 
 **With:**
+
 ```bash
 cp /opt/claude/settings.json /home/claude/.claude/settings.json
 chmod 444 /home/claude/.claude/settings.json
@@ -359,6 +366,7 @@ git commit -m "feat(entrypoint): add Stargate command control phase with de-priv
 ### Task 6: Update CLAUDE.md
 
 **Files:**
+
 - Modify: `CLAUDE.md:7-11` (security framework table, Command Control row)
 - Modify: `CLAUDE.md:182-197` (boot sequence section)
 
@@ -412,6 +420,7 @@ git commit -m "docs: update security framework and boot sequence for Stargate in
 ### Task 7: Update docs/accepted-risks.md
 
 **Files:**
+
 - Modify: `docs/accepted-risks.md`
 
 Update three existing entries to add Stargate as a compensating control. Do NOT mark them as resolved — the underlying risks still exist.
@@ -450,6 +459,7 @@ git commit -m "docs: update accepted risks with Stargate compensating controls"
 ### Task 8: Final formatting check and verification
 
 **Files:**
+
 - All modified files
 
 - [ ] **Step 1: Run prettier on all Markdown files**
@@ -469,6 +479,7 @@ Expected: clean working tree.
 Run: `git log --oneline main..HEAD`
 
 Expected: 7 commits covering:
+
 1. Dockerfile (stargate binary + script COPY)
 2. claude-settings.json (hooks)
 3. generate-stargate-config.sh (new script)
