@@ -14,7 +14,7 @@ mkdir -p /opt/stargate && chmod 755 /opt/stargate
 
 # === 4. Write defaults ===
 # stargate init writes the embedded default config (~588 lines of TOML, 83 rules)
-stargate init --config "$STARGATE_CONFIG"
+/usr/local/bin/stargate init --config "$STARGATE_CONFIG"
 
 # === 5. Extract GitHub owner from REPO_URL ===
 GITHUB_OWNER=""
@@ -48,8 +48,7 @@ fi
 sed -i "s|^allowed_domains = .*|allowed_domains = ${ALLOWED_DOMAINS}|" "$STARGATE_CONFIG"
 
 # === 8. Append targeted RED rule for credential file ===
-# Insert after the last existing RED rule's reason line, before the GREEN rules section.
-# Find the line number of "# === GREEN Rules" and insert the new rule just before it.
+# Insert before the "# === GREEN Rules" section marker, which immediately follows the last RED rule.
 GREEN_LINE=$(grep -n '# === GREEN Rules' "$STARGATE_CONFIG" | head -1 | cut -d: -f1)
 if [[ -n "$GREEN_LINE" ]]; then
     sed -i "${GREEN_LINE}i\\

@@ -212,7 +212,7 @@ export STARGATE_CONFIG=/opt/stargate/stargate.toml
 /usr/local/bin/generate-stargate-config.sh
 
 STARGATE_ENV_ARGS=()
-if [[ -n "${GRAFANA_INSTANCE_ID:-}" && -n "${GRAFANA_API_TOKEN:-}" ]]; then
+if [[ -n "${GRAFANA_INSTANCE_ID:-}" && -n "${GRAFANA_API_TOKEN:-}" && -n "${GRAFANA_OTLP_ENDPOINT:-}" ]]; then
     STARGATE_ENV_ARGS+=(STARGATE_OTEL_USERNAME="$GRAFANA_INSTANCE_ID")
     STARGATE_ENV_ARGS+=(STARGATE_OTEL_PASSWORD="$GRAFANA_API_TOKEN")
 fi
@@ -222,7 +222,7 @@ fi
     sudo -u claude env "${STARGATE_ENV_ARGS[@]}" \
       STARGATE_CONFIG="$STARGATE_CONFIG" \
       CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
-      stargate serve 2>&1 | \
+      /usr/local/bin/stargate serve 2>&1 | \
       while IFS= read -r line; do echo "[STARGATE] $line"; done
     elapsed=$(( $(date +%s) - start_time ))
     if [[ $elapsed -lt 5 ]]; then
