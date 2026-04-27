@@ -22,6 +22,7 @@ chmod 1777 /tmp
 
 # Set ownership and create subdirectories
 chown claude:claude /workspace /home/claude
+chmod 1755 /home/claude
 mkdir -p /home/claude/.cache /home/claude/.claude /home/claude/.local/bin /home/claude/.bun/bin
 chown -R claude:claude /home/claude/.cache /home/claude/.claude /home/claude/.local /home/claude/.bun
 
