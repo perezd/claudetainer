@@ -6,6 +6,7 @@ set -euo pipefail
 # Outputs one of:
 #   REVIEW_COMPLETE:<review_id>:<unresolved_thread_count>
 #   REVIEW_CLEAN:<review_id>  (requires both 0 threads AND "generated no new comments" body text)
+#   ERROR:<message>  (non-transient API or GraphQL failure — fail-closed)
 #   TIMEOUT
 #   RATE_LIMITED
 
@@ -46,7 +47,10 @@ for (( i=1; i<=MAX_POLLS; i++ )); do
         echo "Rate limited, backing off ${BACKOFF}s..." >&2
         sleep "$BACKOFF"
       else
-        echo "gh api error: $STDERR" >&2
+        STDERR_SINGLE_LINE=$(printf '%s' "$STDERR" | tr '\r\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')
+        echo "gh api error: $STDERR_SINGLE_LINE" >&2
+        echo "ERROR:${STDERR_SINGLE_LINE}"
+        exit 0
       fi
       continue
     }
@@ -74,9 +78,17 @@ for (( i=1; i<=MAX_POLLS; i++ )); do
       }
     }' -f owner="$OWNER" -f repo="$REPO" -F pr="$PR_NUMBER" \
     --jq '.data.repository.pullRequest.reviewThreads.totalCount' \
-    2>&1) || { echo "GraphQL error: $THREAD_COUNT" >&2; continue; }
+    2>&1) || {
+      echo "GraphQL error: $THREAD_COUNT" >&2
+      echo "ERROR:GraphQL query failed"
+      exit 0
+    }
 
-  [[ "$THREAD_COUNT" =~ ^[0-9]+$ ]] || { echo "Unexpected thread count: $THREAD_COUNT" >&2; continue; }
+  if ! [[ "$THREAD_COUNT" =~ ^[0-9]+$ ]]; then
+    echo "Unexpected thread count: $THREAD_COUNT" >&2
+    echo "ERROR:Non-numeric thread count"
+    exit 0
+  fi
 
   if [[ "$THREAD_COUNT" -eq 0 ]] && echo "$REVIEW_BODY" | grep -qi "generated no new comments"; then
     echo "REVIEW_CLEAN:${REVIEW_ID}"

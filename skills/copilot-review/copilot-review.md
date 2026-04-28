@@ -72,6 +72,11 @@ Parse the script's stdout output:
 - Report to user: "GitHub API rate limit hit. Wait a few minutes and re-invoke `/copilot-review` to resume."
 - **Stop.**
 
+**On `ERROR:<message>`:**
+
+- Report to user: "Copilot review polling failed: {message}. Check `gh auth status` and repository permissions."
+- **Stop — non-transient failure, do not retry automatically.**
+
 **On `REVIEW_COMPLETE:<review_id>:<thread_count>`:**
 
 - Continue to Step 4.
@@ -158,5 +163,6 @@ mutation($threadId: ID!) {
 | 50 cycles reached                   | Report to user for manual intervention |
 | 8-hour wall-clock timeout           | Report to user, stop                   |
 | Rate limited                        | Report to user, stop                   |
+| API/GraphQL failure (non-transient) | Report error details, stop             |
 | PAT scope insufficient              | Fail at initialization                 |
 | Pagination overflow (>1000 threads) | Report overflow to user                |
