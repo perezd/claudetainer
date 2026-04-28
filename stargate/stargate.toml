@@ -302,12 +302,6 @@ command = "bash"
 flags = ["-n"]
 reason = "Syntax check only — parses but does not execute."
 
-# --- Skill scripts ---
-
-[[rules.green]]
-pattern = '^/home/claude/\.claude/skills/copilot-review/scripts/(poll-copilot-review|get-owner-repo)\.sh(\s|$)'
-reason = "Copilot review skill scripts — polling and owner/repo extraction."
-
 # --- Scope-bound rules ---
 
 [[rules.green]]
