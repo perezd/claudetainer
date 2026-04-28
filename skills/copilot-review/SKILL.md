@@ -80,14 +80,14 @@ Stop if request fails (Copilot not enabled on repo).
 
 ### 2. Poll for Completion
 
-Run the background poller via Bash with `run_in_background`:
+Run the poller via Bash with `run_in_background: true`. This frees you to work on other tasks while Copilot reviews — do not block on the poll. You will be notified automatically when it completes.
 
 ```bash
 /home/claude/.claude/skills/copilot-review/scripts/poll-copilot-review.sh \
   "{owner/repo}" "{pr}" "{STALE_REVIEW_ID}"
 ```
 
-Wait for the background task completion notification.
+Continue with other work. When the background task completion notification arrives, handle the poll result.
 
 ### 3. Handle Poll Result
 
