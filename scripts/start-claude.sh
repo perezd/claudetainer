@@ -123,6 +123,16 @@ else
   echo "WARNING: Failed to add marketplace — skipping plugin install" >&2
 fi
 
+# --- Install skills (copy from image to user-scoped location) ---
+if [[ -d /opt/claude/skills ]]; then
+  if cp -r /opt/claude/skills "$CLAUDE_HOME/.claude/skills" \
+    && chown -R claude:claude "$CLAUDE_HOME/.claude/skills"; then
+    echo "Installed skills to $CLAUDE_HOME/.claude/skills"
+  else
+    echo "WARNING: Skills installation failed" >&2
+  fi
+fi
+
 # --- Redirect to log file before tmux (tee process substitution would interfere with TUI) ---
 exec 1>>"$START_LOG" 2>&1
 
