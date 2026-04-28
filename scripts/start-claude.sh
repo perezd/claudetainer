@@ -133,6 +133,16 @@ if [[ -d /opt/claude/skills ]]; then
   fi
 fi
 
+# --- Install user-level CLAUDE.md (universal behavioral policies) ---
+# Fail-closed: abort boot if policy file cannot be installed — VMs are ephemeral.
+CLAUDE_MD_TARGET="$CLAUDE_HOME/.claude/CLAUDE.md"
+[[ -L "$CLAUDE_MD_TARGET" ]] && rm -f "$CLAUDE_MD_TARGET"
+cp /opt/claude/user-claude-md/CLAUDE.md "$CLAUDE_MD_TARGET" \
+  && chown claude:claude "$CLAUDE_MD_TARGET" \
+  && chmod 444 "$CLAUDE_MD_TARGET" \
+  && echo "Installed user-level CLAUDE.md to $CLAUDE_MD_TARGET" \
+  || { echo "FATAL: Failed to install user-level CLAUDE.md — aborting" >&2; exit 1; }
+
 # --- Redirect to log file before tmux (tee process substitution would interfere with TUI) ---
 exec 1>>"$START_LOG" 2>&1
 
