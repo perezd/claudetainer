@@ -270,7 +270,7 @@ gh issue comment <N> --repo <owner/repo> --body-file /tmp/comment-body.md
 gh api "repos/{owner}/{repo}/issues/comments/{comment_id}" \
   -X PATCH --input /tmp/payload.json
 
-# Fallback:
+# Last-resort fallback (only when no file-input flag exists):
 gh issue comment <N> --repo <owner/repo> --body "$(cat /tmp/comment-body.md)"
 ```
 

@@ -6,7 +6,7 @@ These policies apply across all repositories in the VM. They govern skill usage,
 
 ## Required Skills
 
-These superpowers skills are mandatory process gates — not optional.
+These skills are mandatory process gates — not optional.
 
 | Trigger                                                                  | Skill                             |
 | ------------------------------------------------------------------------ | --------------------------------- |
@@ -17,6 +17,7 @@ These superpowers skills are mandatory process gates — not optional.
 | About to claim work is complete, fixed, or passing                       | `/verification-before-completion` |
 | Implementation is complete and ready to integrate                        | `/finishing-a-development-branch` |
 | Completing a task or major feature                                       | `/requesting-code-review`         |
+| Implementation plan is written and ready for execution                   | `/writing-plans`                  |
 | After creating a PR                                                      | `/copilot-review`                 |
 
 **Workflow order:** `/brainstorming` → `/writing-plans` → `/executing-plans` → `/verification-before-completion` → `/requesting-code-review` → `/finishing-a-development-branch` → `/copilot-review`.
@@ -127,8 +128,8 @@ Never pass arbitrary text content inline on a `gh` command line. Inline `--body`
 
 **Always:** Write content to a temp file first (using the Write tool), then reference it from the `gh` command in a **separate** Bash invocation. Use whichever mechanism fits the command:
 
-- `--body-file /tmp/body.md` — `gh issue comment`, `gh pr create`, `gh pr edit`, etc.
-- `--input /tmp/payload.json` — `gh api` calls
-- `--body "$(cat /tmp/body.md)"` — fallback for any command that lacks a file flag
+- `--body-file /tmp/body.md` — preferred for `gh issue comment`, `gh pr create`, `gh pr edit`, etc.
+- `--input /tmp/payload.json` — preferred for `gh api` calls
+- `--body "$(cat /tmp/body.md)"` — last-resort fallback only for commands that lack a file-input flag
 
-These can be combined as needed. The only rule is: no literal text in the command string.
+These can be combined as needed. The rule is: do not put literal text in the command string; prefer `--body-file`/`--input`, and use `--body "$(cat ...)"` only when no file-based option exists.
