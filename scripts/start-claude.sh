@@ -134,8 +134,8 @@ if [[ -d /opt/claude/skills ]]; then
 fi
 
 # --- Install user-level CLAUDE.md (universal behavioral policies) ---
-# Fail-closed: exit 1 kills this background process before tmux/Claude start.
-# The exclusive flock (fd 9) is never released, so attach-claude.sh blocks forever.
+# Fail-closed: exit 1 kills this process before tmux/Claude start. The flock on
+# fd 9 is released on exit, so attach-claude.sh proceeds but finds no tmux session.
 CLAUDE_MD_TARGET="$CLAUDE_HOME/.claude/CLAUDE.md"
 [[ -L "$CLAUDE_MD_TARGET" ]] && rm -f "$CLAUDE_MD_TARGET"
 [[ -d "$CLAUDE_MD_TARGET" ]] && rm -rf "$CLAUDE_MD_TARGET"
