@@ -71,13 +71,13 @@ for (( i=1; i<=MAX_POLLS; i++ )); do
     query($owner: String!, $repo: String!, $pr: Int!) {
       repository(owner: $owner, name: $repo) {
         pullRequest(number: $pr) {
-          reviewThreads(filterBy: {resolved: false}) {
-            totalCount
+          reviewThreads(first: 100) {
+            nodes { isResolved }
           }
         }
       }
     }' -f owner="$OWNER" -f repo="$REPO" -F pr="$PR_NUMBER" \
-    --jq '.data.repository.pullRequest.reviewThreads.totalCount' \
+    --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' \
     2>&1) || {
       GRAPHQL_ERROR_SINGLE_LINE=$(printf '%s' "$THREAD_COUNT" | tr '\r\n' ' ' | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//')
       echo "GraphQL error: $GRAPHQL_ERROR_SINGLE_LINE" >&2

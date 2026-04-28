@@ -108,10 +108,11 @@ gh api graphql --paginate -f query='
 query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $pr) {
-      reviewThreads(filterBy: {resolved: false}, first: 100, after: $endCursor) {
+      reviewThreads(first: 100, after: $endCursor) {
         pageInfo { hasNextPage endCursor }
         nodes {
           id
+          isResolved
           comments(first: 10) {
             nodes { body path line diffHunk }
           }
