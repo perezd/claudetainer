@@ -124,6 +124,14 @@ query($owner: String!, $repo: String!, $pr: Int!, $endCursor: String) {
 }' -f owner="{owner}" -f repo="{repo}" -F pr={pr}
 ```
 
+Filter the response to unresolved threads only using `--jq` or equivalent:
+
+```
+--jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)'
+```
+
+Discard threads where `isResolved` is `true` before processing — do not reply to or resolve already-resolved threads.
+
 ### 5. Process Findings
 
 **REQUIRED SUB-SKILL:** Use `superpowers:receiving-code-review` with this prepended context:
