@@ -64,7 +64,7 @@ Parse the script's stdout output:
 
 **On `TIMEOUT`:**
 
-- Report to user: "Copilot review polling timed out after 30 minutes. Re-invoke `/copilot-review` to try again."
+- Report to user: "Copilot review polling timed out. Re-invoke `/copilot-review` to try again."
 - **Stop.**
 
 **On `RATE_LIMITED`:**
