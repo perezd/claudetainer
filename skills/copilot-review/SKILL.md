@@ -102,7 +102,7 @@ Continue with other work while polling. When the background task completion noti
 
 ### 4. Fetch Unresolved Threads
 
-Query all review threads via GraphQL (paginated, cap 10 pages / 1000 threads). Filter to unresolved threads client-side (`isResolved == false`). Report overflow if exceeded.
+Query all review threads via GraphQL (paginated). Filter to unresolved threads client-side (`isResolved == false`).
 
 ```bash
 gh api graphql --paginate -f query='
@@ -177,7 +177,6 @@ mutation($threadId: ID!) {
 | Rate limited                        | Report to user, stop           |
 | API/GraphQL failure (non-transient) | Report error details, stop     |
 | PAT scope insufficient              | Fail at initialization         |
-| >1000 unresolved threads            | Report overflow to user        |
 | Empty thread content                | Reply with brief note, resolve |
 
 ## Common Mistakes

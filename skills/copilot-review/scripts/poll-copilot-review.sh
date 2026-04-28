@@ -21,6 +21,7 @@ MAX_POLLS=15
 POLL_INTERVAL=30
 RATE_LIMIT_CONSECUTIVE=0
 RATE_LIMIT_MAX=3
+DEADLINE=$(( $(date +%s) + 540 ))  # 9 minutes — fits within Bash tool's 10-min cap
 
 OWNER="${OWNER_REPO%%/*}"
 REPO="${OWNER_REPO##*/}"
@@ -29,6 +30,10 @@ STDERR_FILE=$(mktemp /tmp/poll-stderr.XXXXXX)
 trap 'rm -f "$STDERR_FILE"' EXIT
 
 for (( i=1; i<=MAX_POLLS; i++ )); do
+  if (( $(date +%s) >= DEADLINE )); then
+    echo "TIMEOUT"
+    exit 0
+  fi
   if (( i > 1 )); then
     sleep "$POLL_INTERVAL"
   fi
@@ -44,6 +49,9 @@ for (( i=1; i<=MAX_POLLS; i++ )); do
           exit 0
         fi
         BACKOFF=$((120 * (2 ** (RATE_LIMIT_CONSECUTIVE - 1))))
+        REMAINING=$(( DEADLINE - $(date +%s) ))
+        if (( REMAINING <= 0 )); then echo "TIMEOUT"; exit 0; fi
+        (( BACKOFF > REMAINING )) && BACKOFF=$REMAINING
         echo "Rate limited, backing off ${BACKOFF}s..." >&2
         sleep "$BACKOFF"
       else

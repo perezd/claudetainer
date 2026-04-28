@@ -136,14 +136,17 @@ fi
 # --- Install user-level CLAUDE.md (universal behavioral policies) ---
 # Fail-closed: exit 1 kills this process before tmux/Claude start. The flock on
 # fd 9 is released on exit, so attach-claude.sh proceeds but finds no tmux session.
+# Atomic install: write to temp file, set ownership/mode, then mv into place.
+# This avoids a TOCTOU window where a symlink at the destination could redirect
+# the cp to an unintended target while running as root.
 CLAUDE_MD_TARGET="$CLAUDE_HOME/.claude/CLAUDE.md"
-[[ -L "$CLAUDE_MD_TARGET" ]] && rm -f "$CLAUDE_MD_TARGET"
-[[ -d "$CLAUDE_MD_TARGET" ]] && rm -rf "$CLAUDE_MD_TARGET"
-cp /opt/claude/user-claude-md/CLAUDE.md "$CLAUDE_MD_TARGET" \
-  && chown claude:claude "$CLAUDE_MD_TARGET" \
-  && chmod 444 "$CLAUDE_MD_TARGET" \
+CLAUDE_MD_TMP="$CLAUDE_HOME/.claude/.CLAUDE.md.tmp.$$"
+cp /opt/claude/user-claude-md/CLAUDE.md "$CLAUDE_MD_TMP" \
+  && chown claude:claude "$CLAUDE_MD_TMP" \
+  && chmod 444 "$CLAUDE_MD_TMP" \
+  && mv -f "$CLAUDE_MD_TMP" "$CLAUDE_MD_TARGET" \
   && echo "Installed user-level CLAUDE.md to $CLAUDE_MD_TARGET" \
-  || { echo "FATAL: Failed to install user-level CLAUDE.md — aborting" >&2; exit 1; }
+  || { rm -f "$CLAUDE_MD_TMP" 2>/dev/null; echo "FATAL: Failed to install user-level CLAUDE.md — aborting" >&2; exit 1; }
 
 # --- Redirect to log file before tmux (tee process substitution would interfere with TUI) ---
 exec 1>>"$START_LOG" 2>&1
