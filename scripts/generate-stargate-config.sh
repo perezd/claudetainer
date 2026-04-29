@@ -64,6 +64,17 @@ if [[ -n "${GRAFANA_INSTANCE_ID:-}" ]] && [[ -n "${GRAFANA_API_TOKEN:-}" ]] && [
     sed -i "/^\[telemetry\]/a endpoint = \"${GRAFANA_OTLP_ENDPOINT}\"" "$STARGATE_CONFIG"
 fi
 
+# Patch service_name from FLY_APP_NAME (for per-app telemetry grouping)
+if [[ -n "${FLY_APP_NAME:-}" ]]; then
+    if [[ "${FLY_APP_NAME}" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]]; then
+        sed -i '/^\[telemetry\]/,/^$/{
+            s|^service_name = .*|service_name = "'"${FLY_APP_NAME}"'"|
+        }' "$STARGATE_CONFIG"
+    else
+        echo "[STARGATE] WARN: FLY_APP_NAME failed validation, using default service_name" >&2
+    fi
+fi
+
 # === 9. Lock permissions ===
 chmod 444 "$STARGATE_CONFIG"
 
