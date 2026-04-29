@@ -81,7 +81,7 @@ digraph issue_driven {
    - `ISSUE_NUMBER` — the issue number
    - `OWNER_REPO` — `owner/repo` from the URL
    - `ISSUE_URL` — the full GitHub URL
-   - `ISSUE_LABELS` — label names (used for bug triage gate)
+   - `ISSUE_LABELS` — label names (used for label-based routing)
 3. Route the issue using label-based routing (see Issue Routing below). Extract label names and match against the routing table. If no recognized label matches, fall back to description-based heuristic.
 
 ## Issue Routing
