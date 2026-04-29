@@ -48,8 +48,8 @@ digraph issue_driven {
     route_check -> debug [label="bug / regression\n/ defect"];
     route_check -> brainstorm [label="enhancement\n/ feature"];
     route_check -> desc_fallback [label="no recognized\nlabel"];
-    desc_fallback -> debug [label="bug-like\nlanguage"];
-    desc_fallback -> brainstorm [label="otherwise"];
+    desc_fallback -> debug [label="unclear /\ninconclusive"];
+    desc_fallback -> brainstorm [label="clearly not\nbug-like"];
     debug -> brainstorm;
     brainstorm -> design;
     design -> panel;
