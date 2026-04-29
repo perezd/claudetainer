@@ -565,6 +565,7 @@ denied_paths = [
 extra_patterns = [
   'sk-ant-[a-zA-Z0-9_-]+',
   'AKIA[A-Z0-9]{16}',
+  'ASIA[A-Z0-9]{16}',
   'ghp_[a-zA-Z0-9]{36}',
   'github_pat_[a-zA-Z0-9_]+',
   'gho_[a-zA-Z0-9]{36}',
