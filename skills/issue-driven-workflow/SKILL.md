@@ -96,10 +96,10 @@ After activation, route to the appropriate skill based on issue labels. Labels a
 **Evaluation order:**
 
 1. Extract label names from the fetched issue metadata.
-2. Match labels against the routing table (case-insensitive). First match wins — if an issue has both `bug` and `enhancement` labels, `bug` takes precedence.
-3. If no recognized label matches, fall back to description-based heuristic: analyze the issue title and body for bug-like language (e.g., "broken", "error", "fails", "unexpected"). If it looks like a bug, route to `/systematic-debugging`. Otherwise, default to `/brainstorming`.
+2. Evaluate the routing table rows in the order shown above (case-insensitive label matching). Issue label ordering is not significant. The first routing-table row with any matching label determines the skill, so bug-class labels (`bug`, `regression`, `defect`) take precedence over enhancement-class labels (`enhancement`, `feature`) on multi-label issues.
+3. If no routing-table row matches any issue label, fall back to the description-based heuristic: analyze the issue title and body for bug-like language (e.g., "broken", "error", "fails", "unexpected"). If it clearly looks like a bug, route to `/systematic-debugging`. If the description is unclear or inconclusive, also route to `/systematic-debugging`. Only default to `/brainstorming` when the description is clearly not bug-like.
 
-**When ambiguous** (no labels, description is unclear), default to treating the issue as a bug. It is lower cost to debug unnecessarily than to skip root-cause analysis on a real defect.
+**When ambiguous** (no labels, description is unclear or inconclusive), default to treating the issue as a bug and route to `/systematic-debugging`. It is lower cost to debug unnecessarily than to skip root-cause analysis on a real defect.
 
 ## Comment Sequence
 
