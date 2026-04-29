@@ -228,10 +228,21 @@ subcommands = ["add", "commit", "checkout", "switch", "merge", "rebase", "pull",
 reason = "Standard git workflow operations (force-push caught by RED rule above)."
 
 [[rules.green]]
+command = "git"
+subcommands = ["remote"]
+pattern = '^\s*git\s+remote\s+(get-url|show)($|\s)'
+reason = "Read-only git remote queries (mutating remote ops caught by YELLOW rule)."
+
+[[rules.green]]
 commands = ["ls", "cat", "head", "tail", "wc", "sort", "uniq", "grep", "rg",
             "file", "stat", "du", "df", "which", "whereis", "type",
-            "true", "false", "test", "[", "find"]
-reason = "Read-only filesystem and text inspection utilities."
+            "true", "false", "test", "[", "find", "echo", "printf"]
+reason = "Read-only filesystem, text inspection, and output utilities."
+
+[[rules.green]]
+command = "sed"
+exclude_flags = ["-i", "--in-place"]
+reason = "Stream editor without in-place modification (sed -i caught by YELLOW rule with LLM review)."
 
 [[rules.green]]
 commands = ["cd", "pwd", "pushd", "popd", "dirs"]
@@ -298,9 +309,19 @@ commands = ["mkdir", "touch"]
 reason = "Directory and file creation."
 
 [[rules.green]]
-command = "bash"
-flags = ["-n"]
+commands = ["bash", "sh", "zsh", "dash"]
+flags = ["-n", "--noexec"]
 reason = "Syntax check only — parses but does not execute."
+
+# --- Copilot review skill scripts ---
+
+[[rules.green]]
+pattern = '^(bash\s+)?/home/claude/\.claude/skills/copilot-review/scripts/poll-copilot-review\.sh(\s|$)'
+reason = "Copilot review poll script — reads PR review status via gh API."
+
+[[rules.green]]
+pattern = '^(bash\s+)?/home/claude/\.claude/skills/copilot-review/scripts/get-owner-repo\.sh($|\s)'
+reason = "Copilot review helper — extracts owner/repo from git remote."
 
 # --- Scope-bound rules ---
 
@@ -379,11 +400,6 @@ command = "sed"
 flags = ["-i", "--in-place"]
 llm_review = true
 reason = "In-place file modification — LLM reviews the expression and target."
-
-[[rules.yellow]]
-command = "sed"
-llm_review = false
-reason = "Text stream editor — ask user (sed -i caught above with LLM review)."
 
 [[rules.yellow]]
 command = "tee"
@@ -509,13 +525,6 @@ reason = "Force-with-lease push — safer than --force but still rewrites remote
 commands = ["open", "xdg-open"]
 llm_review = true
 reason = "Opens URLs or files with default handlers — could launch phishing pages."
-
-# --- Misc ---
-
-[[rules.yellow]]
-commands = ["echo", "printf"]
-llm_review = false
-reason = "Output commands — ask user when used standalone (redirections handled by parser)."
 
 # ---------------------------------------------------------------------------
 # LLM Reviewer Configuration
