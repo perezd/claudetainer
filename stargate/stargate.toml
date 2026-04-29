@@ -536,12 +536,40 @@ reason = "Opens URLs or files with default handlers — could launch phishing pa
 #   2. CLAUDE_CODE_OAUTH_TOKEN + claude binary on PATH → subprocess via claude -p
 # If neither is set, LLM review is disabled (all llm_review commands
 # fall through to YELLOW/ask user).
+#
+# File retrieval sends workspace file contents to the Anthropic API for
+# command classification, independently of Claude Code's own API calls.
+model = "claude-sonnet-4-6"
+max_tokens = 512
+max_response_reasoning_length = 200
+temperature = 0.0
+allow_file_retrieval = true
+max_file_size = 65536
+allowed_paths = ["/workspace/**"]
+denied_paths = [
+  "**/.env", "**/.env.*",
+  "**/*secret*", "**/*token*", "**/*credential*",
+  "**/id_rsa", "**/id_ed25519", "**/*.pem", "**/*.key",
+  "**/*.p12", "**/*.pfx", "**/*.jks",
+  "**/.git/config",
+  "**/.npmrc", "**/.pypirc", "**/.netrc",
+  "**/.docker/config.json",
+  "**/service-account*.json",
+]
 
 # ---------------------------------------------------------------------------
 # Secret Scrubbing
 # ---------------------------------------------------------------------------
 
 [scrubbing]
+extra_patterns = [
+  'AKIA[A-Z0-9]{16}',
+  'ghp_[a-zA-Z0-9]{36}',
+  'github_pat_[a-zA-Z0-9_]+',
+  'gho_[a-zA-Z0-9]{36}',
+  'npm_[a-zA-Z0-9]+',
+  'pypi-[a-zA-Z0-9]+',
+]
 
 # ---------------------------------------------------------------------------
 # Precedent Corpus
@@ -558,6 +586,11 @@ reason = "Opens URLs or files with default handlers — could launch phishing pa
 
 [telemetry]
 enabled = false
+protocol = "http/protobuf"
+service_name = "stargate"
+export_logs = true
+export_metrics = true
+export_traces = true
 
 # ---------------------------------------------------------------------------
 # Local Logging
