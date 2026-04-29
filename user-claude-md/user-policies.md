@@ -11,13 +11,13 @@ These skills are mandatory process gates — not optional.
 | Trigger                                                                  | Skill                             |
 | ------------------------------------------------------------------------ | --------------------------------- |
 | Starting any new feature, design, or creative work — no matter how small | `/brainstorming`                  |
+| Design is approved and implementation needs a plan                       | `/writing-plans`                  |
+| Implementation plan is ready to execute                                  | `/executing-plans`                |
 | Receiving PR review comments or code review feedback                     | `/receiving-code-review`          |
 | Encountering any bug, test failure, or unexpected behavior               | `/systematic-debugging`           |
-| Implementation plan is ready to execute                                  | `/executing-plans`                |
 | About to claim work is complete, fixed, or passing                       | `/verification-before-completion` |
-| Implementation is complete and ready to integrate                        | `/finishing-a-development-branch` |
 | Completing a task or major feature                                       | `/requesting-code-review`         |
-| Implementation plan is written and ready for execution                   | `/writing-plans`                  |
+| Implementation is complete and ready to integrate                        | `/finishing-a-development-branch` |
 | After creating a PR                                                      | `/copilot-review`                 |
 
 **Workflow order:** `/brainstorming` → `/writing-plans` → `/executing-plans` → `/verification-before-completion` → `/requesting-code-review` → `/finishing-a-development-branch` → `/copilot-review`.
