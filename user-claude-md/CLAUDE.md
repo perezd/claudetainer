@@ -113,7 +113,7 @@ When dispatching subagents that modify TypeScript or Markdown files, include an 
 
 When the user provides a full GitHub issue URL, or a shorthand issue reference (e.g., `#24`, `owner/repo#24`) with explicit context confirming it is the work target, invoke the `/issue-driven-workflow` skill. Do not infer an originating issue from branch names, commit messages, or other indirect context. An issue number mentioned only as background or comparison is not sufficient to activate the skill.
 
-Evaluate these overrides **before invoking any skill**. These take precedence over skill-default behaviors per the instruction priority chain (CLAUDE.md > skills > system prompt).
+Evaluate these overrides **before invoking any skill**. These take precedence over skill-default behaviors.
 
 1. **Bug triage order** — If the issue is a bug, regression, or report of unexpected behavior (by label or description), invoke `/systematic-debugging` before proceeding with `/brainstorming` and `/writing-plans`. Do not skip this even if the fix seems obvious.
 2. **Artifact routing** — Design specs and implementation plans are posted as comments on the originating issue, not written to local files. Skill defaults for file output paths (`docs/superpowers/specs/`, `docs/superpowers/plans/`) do not apply.
