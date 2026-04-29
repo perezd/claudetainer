@@ -26,7 +26,8 @@ digraph issue_driven {
     rankdir=TB;
 
     activate [label="Activation\n(fetch issue, extract metadata)" shape=box];
-    bug_check [label="Bug / regression?" shape=diamond];
+    route_check [label="Check labels\n(routing table)" shape=diamond];
+    desc_fallback [label="Description\nheuristic" shape=diamond];
     debug [label="Systematic debugging\n(/systematic-debugging)" shape=box];
     brainstorm [label="Brainstorming\n(/brainstorming)" shape=box];
     design [label="Write design spec" shape=box];
@@ -43,9 +44,12 @@ digraph issue_driven {
     aar [label="Post AAR comment\nto issue" shape=box];
     done [label="Done" shape=doublecircle];
 
-    activate -> bug_check;
-    bug_check -> debug [label="yes"];
-    bug_check -> brainstorm [label="no"];
+    activate -> route_check;
+    route_check -> debug [label="bug / regression\n/ defect"];
+    route_check -> brainstorm [label="enhancement\n/ feature"];
+    route_check -> desc_fallback [label="no recognized\nlabel"];
+    desc_fallback -> debug [label="unclear /\ninconclusive"];
+    desc_fallback -> brainstorm [label="clearly not\nbug-like"];
     debug -> brainstorm;
     brainstorm -> design;
     design -> panel;
@@ -77,17 +81,25 @@ digraph issue_driven {
    - `ISSUE_NUMBER` — the issue number
    - `OWNER_REPO` — `owner/repo` from the URL
    - `ISSUE_URL` — the full GitHub URL
-   - `ISSUE_LABELS` — label names (used for bug triage gate)
-3. Determine issue type: check labels for `bug`, `regression`, `defect`, or similar. If labels are absent, analyze the issue title and body for bug-like language (e.g., "broken", "error", "fails", "unexpected").
+   - `ISSUE_LABELS` — label names (used for label-based routing)
+3. Route the issue using label-based routing (see Issue Routing below). Extract label names and match against the routing table. If no recognized label matches, fall back to description-based heuristic.
 
-## Bug Triage Gate
+## Issue Routing
 
-If the issue is a bug, regression, or report of unexpected behavior (by label or description):
+After activation, route to the appropriate skill based on issue labels. Labels are the authoritative signal; description analysis is the fallback.
 
-1. Invoke `/systematic-debugging` **before** `/brainstorming`.
-2. Identify the root cause first, then design the fix.
+| Label                         | Skill                   | Effect                                                          |
+| ----------------------------- | ----------------------- | --------------------------------------------------------------- |
+| `bug`, `regression`, `defect` | `/systematic-debugging` | Invoke before `/brainstorming` — root-cause analysis first      |
+| `enhancement`, `feature`      | `/brainstorming`        | Invoke directly — skip debugging, start with design exploration |
 
-**When ambiguous**, default to treating the issue as a bug. It is lower cost to debug unnecessarily than to skip root-cause analysis on a real defect.
+**Evaluation order:**
+
+1. Extract label names from the fetched issue metadata.
+2. Evaluate the routing table rows in the order shown above (case-insensitive label matching). Issue label ordering is not significant. The first routing-table row with any matching label determines the skill, so bug-class labels (`bug`, `regression`, `defect`) take precedence over enhancement-class labels (`enhancement`, `feature`) on multi-label issues.
+3. If no routing-table row matches any issue label, fall back to the description-based heuristic: analyze the issue title and body for bug-like language (e.g., "broken", "error", "fails", "unexpected"). If it clearly looks like a bug, route to `/systematic-debugging`. If the description is unclear or inconclusive, also route to `/systematic-debugging`. Only default to `/brainstorming` when the description is clearly not bug-like.
+
+**When ambiguous** (no labels, description is unclear or inconclusive), default to treating the issue as a bug and route to `/systematic-debugging`. It is lower cost to debug unnecessarily than to skip root-cause analysis on a real defect.
 
 ## Comment Sequence
 
